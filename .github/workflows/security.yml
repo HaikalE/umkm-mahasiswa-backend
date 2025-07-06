@@ -1,0 +1,96 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security checks daily at 2 AM UTC
+    - cron: '0 2 * * *'
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Use Node.js 18
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run npm audit
+      run: npm audit --audit-level moderate
+    
+    - name: Run security linting
+      run: |
+        if npm list --depth=0 | grep -q "eslint-plugin-security"; then
+          npx eslint src/ --ext .js
+        else
+          echo "Security linting plugin not found, skipping..."
+        fi
+    
+    - name: Check for hardcoded secrets
+      run: |
+        # Check for potential hardcoded secrets
+        echo "🔍 Checking for potential secrets..."
+        
+        # Check for API keys, passwords, tokens
+        if grep -r -i "api[_-]key\|password\|secret\|token" src/ --include="*.js" | grep -v "process.env" | grep -v "//" | grep -v "\*"; then
+          echo "⚠️ Potential hardcoded secrets found!"
+          grep -r -i "api[_-]key\|password\|secret\|token" src/ --include="*.js" | grep -v "process.env" | grep -v "//" | grep -v "\*"
+          exit 1
+        else
+          echo "✅ No hardcoded secrets detected"
+        fi
+    
+    - name: Check for TODO security items
+      run: |
+        echo "📝 Checking for security TODOs..."
+        if grep -r -i "TODO.*secur\|FIXME.*secur\|XXX.*secur" src/ --include="*.js"; then
+          echo "⚠️ Security-related TODOs found - please review"
+        else
+          echo "✅ No security TODOs found"
+        fi
+    
+    - name: Docker security scan
+      run: |
+        echo "🐳 Running Docker security checks..."
+        
+        # Build image for scanning
+        docker build -t umkm-backend-security-scan .
+        
+        # Basic security checks
+        echo "Checking if running as root..."
+        if docker run --rm umkm-backend-security-scan whoami | grep -q "root"; then
+          echo "⚠️ Container is running as root user"
+        else
+          echo "✅ Container is not running as root"
+        fi
+    
+    - name: Environment file security check
+      run: |
+        echo "🔒 Checking environment file security..."
+        
+        # Check if .env files are in .gitignore
+        if grep -q "\.env" .gitignore; then
+          echo "✅ .env files are properly ignored"
+        else
+          echo "⚠️ .env files should be added to .gitignore"
+        fi
+        
+        # Check for .env files in repository
+        if find . -name ".env" -not -path "./node_modules/*" | grep -q "."; then
+          echo "❌ .env files found in repository!"
+          find . -name ".env" -not -path "./node_modules/*"
+          exit 1
+        else
+          echo "✅ No .env files in repository"
+        fi
