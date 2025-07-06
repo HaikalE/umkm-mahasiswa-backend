@@ -1,6 +1,6 @@
 {
   "name": "umkm-mahasiswa-backend",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "🚀 Backend API untuk Platform UMKM & Mahasiswa - Node.js + PostgreSQL + Express.js",
   "main": "src/server.js",
   "scripts": {
@@ -29,7 +29,8 @@
     "logs": "tail -f logs/combined.log",
     "logs:error": "tail -f logs/error.log",
     "health": "curl -f http://localhost:3000/health || exit 1",
-    "prepare": "chmod +x scripts/*.sh"
+    "prepare": "chmod +x scripts/*.sh",
+    "deadlines:check": "node -e \"require('./src/utils/deadlineService').triggerDeadlineCheck()\""
   },
   "keywords": [
     "nodejs",
@@ -45,7 +46,11 @@
     "business",
     "students",
     "freelance",
-    "projects"
+    "projects",
+    "payment-system",
+    "ai-matching",
+    "checkpoint-tracking",
+    "pricing-intelligence"
   ],
   "author": {
     "name": "Muhammad Haikal Rahman",
@@ -82,7 +87,8 @@
     "morgan": "^1.10.0",
     "winston": "^3.11.0",
     "moment": "^2.29.4",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "node-cron": "^3.0.3"
   },
   "devDependencies": {
     "nodemon": "^3.0.2",
@@ -104,5 +110,16 @@
   "cpu": [
     "x64",
     "arm64"
-  ]
+  ],
+  "features": {
+    "payment_system": "50-50 split payment with escrow protection",
+    "checkpoint_tracking": "Project progress monitoring with milestone approvals",
+    "ai_matching": "Smart student-project matching with ML algorithms",
+    "pricing_intelligence": "Market-based dynamic price suggestions",
+    "deadline_enforcement": "Automated deadline tracking with penalties",
+    "real_time_features": "Socket.io powered chat and notifications",
+    "role_based_auth": "Multi-level authorization system",
+    "file_management": "Cloudinary integration for media uploads",
+    "analytics": "Comprehensive business intelligence dashboard"
+  }
 }
