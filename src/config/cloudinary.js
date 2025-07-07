@@ -1,136 +1,142 @@
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET
-});
+// Initialize Cloudinary configuration check
+let isCloudinaryConfigured = false;
 
-// Configure storage for different file types
-const createStorage = (folder, allowedFormats = ['jpg', 'jpeg', 'png', 'gif', 'webp']) => {
-  return new CloudinaryStorage({
-    cloudinary: cloudinary,
-    params: {
-      folder: `umkm-mahasiswa/${folder}`,
-      allowed_formats: allowedFormats,
-      transformation: [
-        { width: 1200, height: 1200, crop: 'limit', quality: 'auto' }
-      ]
+function initializeCloudinary() {
+  try {
+    // Check if Cloudinary config is properly set
+    if (!process.env.CLOUDINARY_CLOUD_NAME || 
+        !process.env.CLOUDINARY_API_KEY || 
+        !process.env.CLOUDINARY_API_SECRET ||
+        process.env.CLOUDINARY_CLOUD_NAME === 'your-cloudinary-name') {
+      
+      console.log('🔄 Cloudinary not configured - using local file storage');
+      console.log('📝 To enable Cloudinary: Update .env with real Cloudinary credentials');
+      return false;
     }
-  });
-};
 
-// Storage configurations
-const avatarStorage = createStorage('avatars');
-const productStorage = createStorage('products');
-const portfolioStorage = createStorage('portfolios', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx']);
-const chatStorage = createStorage('chats', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'mp4', 'mp3']);
-const reviewStorage = createStorage('reviews');
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
+    });
 
-// Multer configurations
-const avatarUpload = multer({ 
-  storage: avatarStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed for avatars'), false);
-    }
+    isCloudinaryConfigured = true;
+    console.log('✅ Cloudinary configured successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ Cloudinary configuration error:', error.message);
+    console.log('🔄 Falling back to local file storage...');
+    return false;
   }
-});
+}
 
-const productUpload = multer({ 
-  storage: productStorage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed for products'), false);
-    }
-  }
-});
+// Initialize on module load
+initializeCloudinary();
 
-const portfolioUpload = multer({ 
-  storage: portfolioStorage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+// Ensure uploads directory exists for local storage fallback
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory for local file storage');
+}
+
+// Create appropriate storage based on Cloudinary availability
+const storage = isCloudinaryConfigured 
+  ? new CloudinaryStorage({
+      cloudinary: cloudinary,
+      params: {
+        folder: 'umkm-mahasiswa',
+        allowedFormats: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx'],
+        transformation: [{ width: 1000, height: 1000, crop: 'limit' }]
+      },
+    })
+  : multer.diskStorage({
+      destination: function (req, file, cb) {
+        cb(null, 'uploads/');
+      },
+      filename: function (req, file, cb) {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+      }
+    });
+
+// Multer configuration
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
   fileFilter: (req, file, cb) => {
     const allowedMimes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'application/msword', 
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'application/pdf',
+      'application/msword',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     ];
+    
     if (allowedMimes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type for portfolio'), false);
+      cb(new Error('Invalid file type. Only images and documents are allowed.'), false);
     }
   }
 });
 
-const chatUpload = multer({ 
-  storage: chatStorage,
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
-  fileFilter: (req, file, cb) => {
-    const allowedMimes = [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-      'application/pdf', 'application/msword', 
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'video/mp4', 'video/mpeg', 'audio/mpeg', 'audio/wav'
-    ];
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type for chat'), false);
-    }
+// Helper function to get file URL
+function getFileUrl(file) {
+  if (isCloudinaryConfigured && file.path) {
+    return file.path; // Cloudinary URL
+  } else if (file.filename) {
+    return `/uploads/${file.filename}`; // Local file URL
   }
-});
+  return null;
+}
 
-const reviewUpload = multer({ 
-  storage: reviewStorage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-  fileFilter: (req, file, cb) => {
-    if (file.mimetype.startsWith('image/')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only image files are allowed for reviews'), false);
-    }
-  }
-});
-
-// Utility functions
-const deleteFromCloudinary = async (publicId) => {
+// Delete file function
+async function deleteFile(fileUrl) {
   try {
-    const result = await cloudinary.uploader.destroy(publicId);
-    return result;
+    if (isCloudinaryConfigured && fileUrl.includes('cloudinary.com')) {
+      // Extract public_id from Cloudinary URL
+      const publicId = fileUrl.split('/').pop().split('.')[0];
+      await cloudinary.uploader.destroy(publicId);
+    } else {
+      // Delete local file
+      const filename = fileUrl.split('/').pop();
+      const filePath = path.join(uploadsDir, filename);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
   } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
-    throw error;
+    console.error('Error deleting file:', error.message);
   }
-};
+}
 
-const getPublicIdFromUrl = (url) => {
-  try {
-    const parts = url.split('/');
-    const filename = parts[parts.length - 1];
-    return filename.split('.')[0];
-  } catch (error) {
-    console.error('Error extracting public ID:', error);
-    return null;
-  }
-};
+// Upload middleware with different configurations
+const uploadSingle = upload.single('file');
+const uploadMultiple = upload.array('files', 5);
+const uploadFields = upload.fields([
+  { name: 'avatar', maxCount: 1 },
+  { name: 'images', maxCount: 10 },
+  { name: 'documents', maxCount: 5 }
+]);
 
 module.exports = {
   cloudinary,
-  avatarUpload,
-  productUpload,
-  portfolioUpload,
-  chatUpload,
-  reviewUpload,
-  deleteFromCloudinary,
-  getPublicIdFromUrl
+  upload,
+  uploadSingle,
+  uploadMultiple,
+  uploadFields,
+  getFileUrl,
+  deleteFile,
+  isCloudinaryConfigured
 };
