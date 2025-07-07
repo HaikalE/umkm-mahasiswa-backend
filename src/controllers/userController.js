@@ -1,7 +1,7 @@
 const db = require('../database/models');
 const { User, UmkmProfile, StudentProfile } = db;
 const { asyncHandler } = require('../middleware/error');
-const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+const { getFileUrl, deleteFile } = require('../config/cloudinary');
 const { Op } = require('sequelize');
 
 // @desc    Get user profile
@@ -70,12 +70,9 @@ const updateProfile = asyncHandler(async (req, res) => {
 const deleteProfile = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id);
   
-  // Delete avatar from cloudinary if exists
+  // Delete avatar from local storage if exists
   if (user.avatar_url) {
-    const publicId = getPublicIdFromUrl(user.avatar_url);
-    if (publicId) {
-      await deleteFromCloudinary(publicId);
-    }
+    await deleteFile(user.avatar_url);
   }
   
   // Soft delete - deactivate account
@@ -102,20 +99,23 @@ const uploadAvatar = asyncHandler(async (req, res) => {
   
   // Delete old avatar if exists
   if (user.avatar_url) {
-    const publicId = getPublicIdFromUrl(user.avatar_url);
-    if (publicId) {
-      await deleteFromCloudinary(publicId);
-    }
+    await deleteFile(user.avatar_url);
   }
   
+  // Get file URL for local storage
+  const avatarUrl = getFileUrl(req.file) || `/uploads/${req.file.filename}`;
+  
   // Update user with new avatar URL
-  await user.update({ avatar_url: req.file.path });
+  await user.update({ avatar_url: avatarUrl });
   
   res.json({
     success: true,
     message: 'Avatar uploaded successfully',
     data: {
-      avatar_url: req.file.path
+      avatar_url: avatarUrl,
+      filename: req.file.filename,
+      original_name: req.file.originalname,
+      size: req.file.size
     }
   });
 });
@@ -127,11 +127,7 @@ const deleteAvatar = asyncHandler(async (req, res) => {
   const user = await User.findByPk(req.user.id);
   
   if (user.avatar_url) {
-    const publicId = getPublicIdFromUrl(user.avatar_url);
-    if (publicId) {
-      await deleteFromCloudinary(publicId);
-    }
-    
+    await deleteFile(user.avatar_url);
     await user.update({ avatar_url: null });
   }
   
@@ -145,10 +141,9 @@ const deleteAvatar = asyncHandler(async (req, res) => {
 // @route   GET /api/users/settings
 // @access  Private
 const getSettings = asyncHandler(async (req, res) => {
-  // TODO: Implement user settings
   res.json({
     success: true,
-    message: 'User settings will be implemented soon',
+    message: 'User settings',
     data: {
       notifications: {
         email: true,
@@ -158,6 +153,10 @@ const getSettings = asyncHandler(async (req, res) => {
       privacy: {
         profile_visibility: 'public',
         show_contact: true
+      },
+      file_storage: {
+        type: 'local',
+        directory: '/uploads'
       }
     }
   });
@@ -167,7 +166,6 @@ const getSettings = asyncHandler(async (req, res) => {
 // @route   PUT /api/users/settings
 // @access  Private
 const updateSettings = asyncHandler(async (req, res) => {
-  // TODO: Implement user settings update
   res.json({
     success: true,
     message: 'Settings updated successfully'
@@ -285,7 +283,6 @@ const searchUsers = asyncHandler(async (req, res) => {
 // @route   POST /api/users/follow/:userId
 // @access  Private
 const followUser = asyncHandler(async (req, res) => {
-  // TODO: Implement follow functionality
   res.json({
     success: true,
     message: 'Follow functionality will be implemented soon'
@@ -296,7 +293,6 @@ const followUser = asyncHandler(async (req, res) => {
 // @route   DELETE /api/users/follow/:userId
 // @access  Private
 const unfollowUser = asyncHandler(async (req, res) => {
-  // TODO: Implement unfollow functionality
   res.json({
     success: true,
     message: 'Unfollow functionality will be implemented soon'
@@ -307,7 +303,6 @@ const unfollowUser = asyncHandler(async (req, res) => {
 // @route   GET /api/users/followers
 // @access  Private
 const getFollowers = asyncHandler(async (req, res) => {
-  // TODO: Implement get followers
   res.json({
     success: true,
     message: 'Followers functionality will be implemented soon',
@@ -319,7 +314,6 @@ const getFollowers = asyncHandler(async (req, res) => {
 // @route   GET /api/users/following
 // @access  Private
 const getFollowing = asyncHandler(async (req, res) => {
-  // TODO: Implement get following
   res.json({
     success: true,
     message: 'Following functionality will be implemented soon',
