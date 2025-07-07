@@ -130,12 +130,24 @@ const uploadFields = upload.fields([
   { name: 'documents', maxCount: 5 }
 ]);
 
+// Specific upload middleware for different purposes
+const avatarUpload = upload.single('avatar');
+const productUpload = upload;
+const portfolioUpload = upload;
+const chatUpload = upload;
+const reviewUpload = upload;
+
 module.exports = {
   cloudinary,
   upload,
   uploadSingle,
   uploadMultiple,
   uploadFields,
+  avatarUpload,
+  productUpload,
+  portfolioUpload,
+  chatUpload,
+  reviewUpload,
   getFileUrl,
   deleteFile,
   isCloudinaryConfigured

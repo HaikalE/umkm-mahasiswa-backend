@@ -14,7 +14,7 @@ const {
 router.use(authenticateJWT);
 
 // Single file uploads
-router.post('/avatar', avatarUpload.single('file'), uploadController.uploadAvatar);
+router.post('/avatar', avatarUpload, uploadController.uploadAvatar);
 router.post('/product', productUpload.single('file'), uploadController.uploadProductImage);
 router.post('/portfolio', portfolioUpload.single('file'), uploadController.uploadPortfolioFile);
 router.post('/chat', chatUpload.single('file'), uploadController.uploadChatFile);

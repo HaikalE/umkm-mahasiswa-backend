@@ -14,7 +14,7 @@ router.put('/profile', userController.updateProfile);
 router.delete('/profile', userController.deleteProfile);
 
 // Avatar upload
-router.post('/upload-avatar', avatarUpload.single('avatar'), userController.uploadAvatar);
+router.post('/upload-avatar', avatarUpload, userController.uploadAvatar);
 router.delete('/avatar', userController.deleteAvatar);
 
 // User preferences and settings
