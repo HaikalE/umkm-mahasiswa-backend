@@ -6,6 +6,8 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 require('dotenv').config();
 
 const db = require('./database/models');
@@ -26,8 +28,17 @@ const io = new Server(server, {
 // Initialize Firebase
 initializeFirebase();
 
+// Ensure uploads directory exists
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Created uploads directory');
+}
+
 // Security middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow serving static files
+}));
 app.use(compression());
 
 // CORS configuration
@@ -38,6 +49,12 @@ const corsOptions = {
   credentials: true
 };
 app.use(cors(corsOptions));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+  maxAge: '1d', // Cache for 1 day
+  etag: true
+}));
 
 // Rate limiting
 const limiter = rateLimit({
@@ -72,7 +89,13 @@ app.get('/health', (req, res) => {
     status: 'OK',
     message: 'UMKM Mahasiswa Backend API is running',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0'
+    version: process.env.npm_package_version || '1.1.0',
+    environment: process.env.NODE_ENV || 'development',
+    database: 'connected', // Will be updated after DB connection test
+    services: {
+      firebase: process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'enabled' : 'disabled',
+      cloudinary: process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'enabled' : 'disabled'
+    }
   });
 });
 
@@ -83,7 +106,9 @@ app.use('/api', routes);
 app.get('/api/docs', (req, res) => {
   res.json({
     message: 'UMKM Mahasiswa Platform API Documentation',
-    version: '1.0.0',
+    version: '1.1.0',
+    environment: process.env.NODE_ENV || 'development',
+    baseUrl: `http://localhost:${process.env.PORT || 3000}`,
     endpoints: {
       auth: {
         'POST /api/auth/register': 'Register new user',
@@ -129,7 +154,16 @@ app.get('/api/docs', (req, res) => {
       reviews: {
         'GET /api/reviews': 'Get reviews',
         'POST /api/reviews': 'Create review'
+      },
+      uploads: {
+        'GET /uploads/:filename': 'Access uploaded files (local storage)',
+        'POST /api/uploads': 'Upload files'
       }
+    },
+    notes: {
+      authentication: 'Include Authorization: Bearer <token> header for protected endpoints',
+      fileUploads: 'Files are stored locally in uploads/ directory if Cloudinary is not configured',
+      realtime: 'Socket.io connection available at same host for real-time features'
     }
   });
 });
@@ -140,7 +174,7 @@ app.use(errorHandler);
 
 // Socket.io connection handling
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`👤 User connected: ${socket.id}`);
   socketHandler(io, socket);
 });
 
@@ -162,10 +196,15 @@ async function startServer() {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api/docs`);
       console.log(`🔍 Health Check: http://localhost:${PORT}/health`);
+      console.log(`📁 Static Files: http://localhost:${PORT}/uploads/`);
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔥 Firebase: ${process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'Enabled' : 'Disabled (dev mode)'}`);
+      console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'Enabled' : 'Disabled (local storage)'}`);
     });
   } catch (error) {
     console.error('❌ Unable to start server:', error);
+    console.error('💡 Check your database configuration in .env file');
+    console.error('💡 Make sure PostgreSQL is running and accessible');
     process.exit(1);
   }
 }
