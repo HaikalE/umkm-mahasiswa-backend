@@ -26,7 +26,7 @@ const sequelize = new Sequelize(
   }
 );
 
-// Import models
+// Import all models
 const User = require('./User')(sequelize, Sequelize.DataTypes);
 const UmkmProfile = require('./UmkmProfile')(sequelize, Sequelize.DataTypes);
 const StudentProfile = require('./StudentProfile')(sequelize, Sequelize.DataTypes);
@@ -36,6 +36,13 @@ const Application = require('./Application')(sequelize, Sequelize.DataTypes);
 const Chat = require('./Chat')(sequelize, Sequelize.DataTypes);
 const Review = require('./Review')(sequelize, Sequelize.DataTypes);
 const Notification = require('./Notification')(sequelize, Sequelize.DataTypes);
+
+// Import missing models
+const Payment = require('./Payment')(sequelize, Sequelize.DataTypes);
+const PricingTier = require('./PricingTier')(sequelize, Sequelize.DataTypes);
+const ProjectCheckpoint = require('./ProjectCheckpoint')(sequelize, Sequelize.DataTypes);
+const Verification = require('./Verification')(sequelize, Sequelize.DataTypes);
+const AIMatching = require('./AIMatching')(sequelize, Sequelize.DataTypes);
 
 // Define associations
 // User associations
@@ -49,6 +56,9 @@ User.hasMany(Chat, { foreignKey: 'receiver_id', as: 'receivedChats' });
 User.hasMany(Review, { foreignKey: 'reviewer_id', as: 'givenReviews' });
 User.hasMany(Review, { foreignKey: 'reviewed_id', as: 'receivedReviews' });
 User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+User.hasMany(Payment, { foreignKey: 'from_user_id', as: 'sentPayments' });
+User.hasMany(Payment, { foreignKey: 'to_user_id', as: 'receivedPayments' });
+User.hasMany(Verification, { foreignKey: 'user_id', as: 'verifications' });
 
 // UMKM Profile associations
 UmkmProfile.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -63,6 +73,9 @@ Product.hasMany(Review, { foreignKey: 'product_id', as: 'reviews' });
 // Project associations
 Project.belongsTo(User, { foreignKey: 'umkm_id', as: 'umkm' });
 Project.hasMany(Application, { foreignKey: 'project_id', as: 'applications' });
+Project.hasMany(ProjectCheckpoint, { foreignKey: 'project_id', as: 'checkpoints' });
+Project.hasMany(Payment, { foreignKey: 'project_id', as: 'payments' });
+Project.belongsTo(PricingTier, { foreignKey: 'pricing_tier_id', as: 'pricingTier' });
 
 // Application associations
 Application.belongsTo(User, { foreignKey: 'student_id', as: 'student' });
@@ -81,6 +94,24 @@ Review.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 // Notification associations
 Notification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
+// Payment associations
+Payment.belongsTo(User, { foreignKey: 'from_user_id', as: 'fromUser' });
+Payment.belongsTo(User, { foreignKey: 'to_user_id', as: 'toUser' });
+Payment.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+// PricingTier associations
+PricingTier.hasMany(Project, { foreignKey: 'pricing_tier_id', as: 'projects' });
+
+// ProjectCheckpoint associations
+ProjectCheckpoint.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+// Verification associations
+Verification.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+
+// AIMatching associations
+AIMatching.belongsTo(User, { foreignKey: 'student_id', as: 'student' });
+AIMatching.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 const db = {
   sequelize,
   Sequelize,
@@ -92,7 +123,12 @@ const db = {
   Application,
   Chat,
   Review,
-  Notification
+  Notification,
+  Payment,
+  PricingTier,
+  ProjectCheckpoint,
+  Verification,
+  AIMatching
 };
 
 module.exports = db;
