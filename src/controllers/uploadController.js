@@ -1,5 +1,17 @@
 const { asyncHandler } = require('../middleware/error');
-const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
+const { getFileUrl, deleteFile } = require('../config/cloudinary');
+const path = require('path');
+
+// Helper function to get file info for local storage
+function getLocalFileInfo(file) {
+  return {
+    url: getFileUrl(file) || `/uploads/${file.filename}`,
+    filename: file.filename,
+    original_name: file.originalname,
+    size: file.size,
+    format: path.extname(file.originalname).slice(1)
+  };
+}
 
 // @desc    Upload avatar
 // @route   POST /api/uploads/avatar
@@ -15,12 +27,7 @@ const uploadAvatar = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Avatar uploaded successfully',
-    data: {
-      url: req.file.path,
-      public_id: req.file.public_id,
-      original_name: req.file.originalname,
-      size: req.file.size
-    }
+    data: getLocalFileInfo(req.file)
   });
 });
 
@@ -38,12 +45,7 @@ const uploadProductImage = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Product image uploaded successfully',
-    data: {
-      url: req.file.path,
-      public_id: req.file.public_id,
-      original_name: req.file.originalname,
-      size: req.file.size
-    }
+    data: getLocalFileInfo(req.file)
   });
 });
 
@@ -58,12 +60,7 @@ const uploadProductImages = asyncHandler(async (req, res) => {
     });
   }
   
-  const uploadedFiles = req.files.map(file => ({
-    url: file.path,
-    public_id: file.public_id,
-    original_name: file.originalname,
-    size: file.size
-  }));
+  const uploadedFiles = req.files.map(file => getLocalFileInfo(file));
   
   res.json({
     success: true,
@@ -86,13 +83,7 @@ const uploadPortfolioFile = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Portfolio file uploaded successfully',
-    data: {
-      url: req.file.path,
-      public_id: req.file.public_id,
-      original_name: req.file.originalname,
-      size: req.file.size,
-      format: req.file.format
-    }
+    data: getLocalFileInfo(req.file)
   });
 });
 
@@ -107,13 +98,7 @@ const uploadPortfolioFiles = asyncHandler(async (req, res) => {
     });
   }
   
-  const uploadedFiles = req.files.map(file => ({
-    url: file.path,
-    public_id: file.public_id,
-    original_name: file.originalname,
-    size: file.size,
-    format: file.format
-  }));
+  const uploadedFiles = req.files.map(file => getLocalFileInfo(file));
   
   res.json({
     success: true,
@@ -136,13 +121,7 @@ const uploadChatFile = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Chat file uploaded successfully',
-    data: {
-      url: req.file.path,
-      public_id: req.file.public_id,
-      original_name: req.file.originalname,
-      size: req.file.size,
-      format: req.file.format
-    }
+    data: getLocalFileInfo(req.file)
   });
 });
 
@@ -160,12 +139,7 @@ const uploadReviewImage = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     message: 'Review image uploaded successfully',
-    data: {
-      url: req.file.path,
-      public_id: req.file.public_id,
-      original_name: req.file.originalname,
-      size: req.file.size
-    }
+    data: getLocalFileInfo(req.file)
   });
 });
 
@@ -180,12 +154,7 @@ const uploadReviewImages = asyncHandler(async (req, res) => {
     });
   }
   
-  const uploadedFiles = req.files.map(file => ({
-    url: file.path,
-    public_id: file.public_id,
-    original_name: file.originalname,
-    size: file.size
-  }));
+  const uploadedFiles = req.files.map(file => getLocalFileInfo(file));
   
   res.json({
     success: true,
@@ -194,33 +163,23 @@ const uploadReviewImages = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Delete file from Cloudinary
+// @desc    Delete file from local storage
 // @route   DELETE /api/uploads/file
 // @access  Private
-const deleteFile = asyncHandler(async (req, res) => {
-  const { url, public_id } = req.body;
+const deleteFileEndpoint = asyncHandler(async (req, res) => {
+  const { url, filename } = req.body;
   
-  if (!url && !public_id) {
+  if (!url && !filename) {
     return res.status(400).json({
       success: false,
-      message: 'File URL or public_id is required'
+      message: 'File URL or filename is required'
     });
   }
   
-  let publicIdToDelete = public_id;
-  if (!publicIdToDelete && url) {
-    publicIdToDelete = getPublicIdFromUrl(url);
-  }
-  
-  if (!publicIdToDelete) {
-    return res.status(400).json({
-      success: false,
-      message: 'Could not extract public_id from URL'
-    });
-  }
+  let fileToDelete = filename || url;
   
   try {
-    const result = await deleteFromCloudinary(publicIdToDelete);
+    const result = await deleteFile(fileToDelete);
     
     if (result.result === 'ok') {
       res.json({
@@ -249,36 +208,42 @@ const getUploadInfo = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
+      storage_type: 'local',
+      upload_directory: '/uploads',
+      base_url: 'http://localhost:3000/uploads',
       limits: {
         avatar: {
           max_size: '5MB',
-          formats: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+          formats: ['jpg', 'jpeg', 'png', 'gif']
         },
         product: {
-          max_size: '10MB',
+          max_size: '5MB',
           max_files: 5,
-          formats: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+          formats: ['jpg', 'jpeg', 'png', 'gif']
         },
         portfolio: {
-          max_size: '20MB',
+          max_size: '5MB',
           max_files: 10,
-          formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx']
+          formats: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx']
         },
         chat: {
-          max_size: '25MB',
-          formats: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'doc', 'docx', 'mp4', 'mp3']
+          max_size: '5MB',
+          formats: ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'doc', 'docx']
         },
         review: {
           max_size: '5MB',
           max_files: 3,
-          formats: ['jpg', 'jpeg', 'png', 'gif', 'webp']
+          formats: ['jpg', 'jpeg', 'png', 'gif']
         }
       },
       supported_formats: {
-        image: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
-        document: ['pdf', 'doc', 'docx'],
-        video: ['mp4', 'mpeg'],
-        audio: ['mp3', 'wav']
+        image: ['jpg', 'jpeg', 'png', 'gif'],
+        document: ['pdf', 'doc', 'docx']
+      },
+      notes: {
+        cloudinary: 'Disabled - using local file storage only',
+        access: 'Files accessible at http://localhost:3000/uploads/<filename>',
+        storage_location: './uploads/ directory'
       }
     }
   });
@@ -293,6 +258,6 @@ module.exports = {
   uploadChatFile,
   uploadReviewImage,
   uploadReviewImages,
-  deleteFile,
+  deleteFile: deleteFileEndpoint,
   getUploadInfo
 };
