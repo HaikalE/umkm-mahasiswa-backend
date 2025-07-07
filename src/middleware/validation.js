@@ -52,6 +52,13 @@ const validateUserLogin = [
   handleValidationErrors
 ];
 
+const validateRefreshToken = [
+  body('refresh_token')
+    .notEmpty()
+    .withMessage('Refresh token is required'),
+  handleValidationErrors
+];
+
 // UMKM profile validation
 const validateUmkmProfile = [
   body('business_name')
@@ -237,6 +244,7 @@ module.exports = {
   handleValidationErrors,
   validateUserRegistration,
   validateUserLogin,
+  validateRefreshToken,
   validateUmkmProfile,
   validateStudentProfile,
   validateProduct,

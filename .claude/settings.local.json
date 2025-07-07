@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(sudo service:*)",
+      "Bash(ss:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(curl:*)",
+      "Bash(timeout:*)",
+      "Bash(pkill:*)",
+      "Bash(DEBUG=*)",
+      "Bash(npm start)",
+      "Bash(pg_isready:*)",
+      "Bash(NODE_ENV=development node src/server.js)",
+      "Bash(rm:*)",
+      "Bash(cat:*)",
+      "Bash(kill:*)"
+    ],
+    "deny": []
+  }
+}
