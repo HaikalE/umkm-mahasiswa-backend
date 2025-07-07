@@ -18,63 +18,148 @@
 - PostgreSQL 15+
 - Git
 
-### **Langkah Cepat (5 menit setup)**
+### **Langkah Cepat (5 menit setup) ⚡**
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/HaikalE/umkm-mahasiswa-backend.git
 cd umkm-mahasiswa-backend
 
-# 2. Install dependencies
-npm install
+# 2. Auto setup (RECOMMENDED)
+chmod +x setup.sh
+./setup.sh
 
-# 3. Setup environment
-cp .env.example .env
-# Edit .env - ganti DB_PASSWORD dengan password PostgreSQL kamu
+# 3. Setup database (pastikan PostgreSQL sudah running)
+createdb umkm_mahasiswa_db
+# Edit .env file - ganti DB_PASSWORD dengan password PostgreSQL kamu
 
-# 4. Setup database (pastikan PostgreSQL sudah running)
-npm run db:create
-npm run db:migrate
-npm run db:seed  # optional - untuk data sample
-
-# 5. Start development server
+# 4. Start development server
 npm run dev
 
 # ✅ API akan berjalan di http://localhost:3000
 ```
 
-### **Troubleshooting Database**
-
-Jika error database connection:
+### **Manual Setup (Alternative)**
 
 ```bash
-# Ubuntu/Debian
+# Install dependencies
+npm install
+
+# Setup environment
+cp .env.development .env
+# Edit .env - ganti DB_PASSWORD dengan password PostgreSQL kamu
+
+# Create uploads directory
+mkdir uploads
+
+# Setup database
+npm run db:create  # optional
+npm run db:migrate # optional
+npm run db:seed    # optional - untuk data sample
+
+# Start development server
+npm run dev
+```
+
+---
+
+## ⚠️ TROUBLESHOOTING - APP CRASH FIXES
+
+### ❌ **Problem: App Crashes After "Cloudinary not configured" Message**
+
+**✅ FIXED! Updated: 07 Juli 2025**
+
+The crash issue has been **completely resolved**. If you're still experiencing crashes:
+
+#### **Solution 1: Update to Latest Version**
+```bash
+git pull origin main
+npm install
+npm run dev
+```
+
+#### **Solution 2: Check Error Messages**
+The app now provides detailed error messages. Look for:
+- ❌ Database connection errors
+- ❌ Missing model files
+- ❌ Environment configuration issues
+
+#### **Solution 3: Quick Fix Commands**
+```bash
+# Create .env file if missing
+cp .env.development .env
+
+# Ensure uploads directory exists
+mkdir -p uploads
+
+# Check database connection
+createdb umkm_mahasiswa_db
+
+# Start with verbose logging
+npm run dev
+```
+
+### 🗄️ **Database Connection Issues**
+
+**Error: "Unable to start server: Database connection failed"**
+
+#### **Quick Fix:**
+```bash
+# 1. Start PostgreSQL service
+# Windows: Start PostgreSQL service from Services
+# macOS: brew services start postgresql  
+# Linux: sudo systemctl start postgresql
+
+# 2. Create database
+createdb umkm_mahasiswa_db
+
+# 3. Test connection
+psql -U postgres -h localhost -d umkm_mahasiswa_db
+
+# 4. Update .env file
+# Edit DB_PASSWORD in .env file
+```
+
+#### **For Ubuntu/Debian:**
+```bash
 sudo systemctl start postgresql
 sudo -u postgres psql
-
-# Windows (jika pakai XAMPP/PostgreSQL installer)
-# Start PostgreSQL service dari Control Panel
-
-# Buat user postgres jika belum ada
-CREATE USER postgres WITH PASSWORD 'your_password';
-ALTER USER postgres CREATEDB;
-
-# Test koneksi
-psql -U postgres -h localhost -p 5432
+CREATE DATABASE umkm_mahasiswa_db;
+\q
 ```
 
-### **Test API**
+#### **For Windows (XAMPP/PostgreSQL installer):**
+- Start PostgreSQL service from Control Panel
+- Use pgAdmin or command line to create database
 
-```bash
-# Health check
-curl http://localhost:3000/health
+### 🔐 **Services Configuration (All Optional)**
 
-# API docs
-curl http://localhost:3000/api/docs
+**✅ Firebase is OPTIONAL** - The app works with JWT authentication only:
+- Default .env disables Firebase
+- Local JWT authentication works perfectly
 
-# Test endpoints
-curl http://localhost:3000/api/products
-```
+**✅ Cloudinary is OPTIONAL** - The app uses local file storage by default:
+- Files stored in `uploads/` directory
+- Accessible at `http://localhost:3000/uploads/filename`
+
+### 🔧 **Common Error Solutions**
+
+| Error Message | Solution |
+|---------------|----------|
+| `MODULE_NOT_FOUND` | Run `npm install` |
+| `ECONNREFUSED` | Start PostgreSQL service |
+| `database "umkm_mahasiswa_db" does not exist` | Run `createdb umkm_mahasiswa_db` |
+| `permission denied` | Run `chmod +x setup.sh` |
+| `Port 3000 already in use` | Kill process: `sudo lsof -t -i tcp:3000 \| xargs kill -9` |
+| `Firebase initialization failed` | Normal - Firebase is optional in development |
+| `Cloudinary not configured` | Normal - Using local storage instead |
+
+### 🆘 **Still Having Issues?**
+
+1. **Check the logs** - Look for specific error messages
+2. **Test endpoints** - Visit `http://localhost:3000/health`
+3. **Verify setup** - Run `./setup.sh` again
+4. **Create an issue** - [GitHub Issues](https://github.com/HaikalE/umkm-mahasiswa-backend/issues)
 
 ---
 
@@ -175,49 +260,6 @@ Platform digital yang menghubungkan **UMKM (Usaha Mikro Kecil Menengah)** dengan
 
 ---
 
-## 🚀 Quick Start
-
-### Menggunakan Docker (Recommended)
-
-```bash
-# Clone repository
-git clone https://github.com/HaikalE/umkm-mahasiswa-backend.git
-cd umkm-mahasiswa-backend
-
-# Setup environment
-cp .env.example .env
-# Edit .env dengan konfigurasi Anda
-
-# Deploy dengan Docker
-./scripts/deploy.sh development
-
-# API akan berjalan di http://localhost:3000
-```
-
-### Manual Installation
-
-```bash
-# Clone dan setup
-git clone https://github.com/HaikalE/umkm-mahasiswa-backend.git
-cd umkm-mahasiswa-backend
-
-# Install dependencies
-npm install
-
-# Setup environment
-cp .env.example .env
-
-# Setup database
-npm run db:create
-npm run db:migrate
-npm run db:seed
-
-# Start development server
-npm run dev
-```
-
----
-
 ## 📦 Installation
 
 ### Prerequisites
@@ -239,7 +281,7 @@ cd umkm-mahasiswa-backend
 #### 2. **Environment Setup**
 ```bash
 # Copy environment template
-cp .env.example .env
+cp .env.development .env
 
 # Edit .env file dengan konfigurasi Anda
 nano .env
@@ -274,9 +316,9 @@ CLOUDINARY_API_SECRET=your-api-secret
 npm install
 
 # Create database
-npm run db:create
+createdb umkm_mahasiswa_db
 
-# Run migrations
+# Run migrations (optional)
 npm run db:migrate
 
 # Seed with sample data (optional)
@@ -356,15 +398,16 @@ curl -X POST http://localhost:3000/api/projects \
 ### Interactive Documentation
 Akses dokumentasi lengkap di: **`http://localhost:3000/api/docs`**
 
-### Demo Accounts
-```
-UMKM Account:
-📧 Email: warung.makan.sederhana@gmail.com
-🔑 Password: password123
+### Test Endpoints
+```bash
+# Health check
+curl http://localhost:3000/health
 
-Student Account:
-📧 Email: andi.mahasiswa@gmail.com
-🔑 Password: password123
+# API info
+curl http://localhost:3000/api
+
+# All products
+curl http://localhost:3000/api/products
 ```
 
 ---
@@ -444,54 +487,6 @@ Student Account:
 - max_applicants, total_applicants (Integer)
 ```
 
-#### **applications** - Student applications
-```sql
-- id (UUID, PK)
-- project_id (UUID, FK → projects.id)
-- student_id (UUID, FK → users.id)
-- cover_letter (Text)
-- proposed_budget, proposed_duration (Decimal/Integer)
-- portfolio_links, attachments (JSON Array)
-- status (ENUM: 'pending', 'reviewed', 'accepted', 'rejected')
-- umkm_notes (Text)
-```
-
-#### **chats** - Real-time messaging
-```sql
-- id (UUID, PK)
-- sender_id, receiver_id (UUID, FK → users.id)
-- conversation_id (String)
-- message (Text)
-- message_type (ENUM: 'text', 'image', 'file')
-- file_url, file_name (String)
-- is_read, is_deleted (Boolean)
-- reply_to_id (UUID, FK → chats.id)
-```
-
-#### **reviews** - Rating & review system
-```sql
-- id (UUID, PK)
-- reviewer_id, reviewed_id (UUID, FK → users.id)
-- product_id (UUID, FK → products.id, nullable)
-- project_id (UUID, FK → projects.id, nullable)
-- rating (Integer, 1-5)
-- comment (Text)
-- review_type (ENUM: 'product', 'service', 'collaboration')
-- images (JSON Array)
-- is_verified (Boolean)
-```
-
-#### **notifications** - Push notification system
-```sql
-- id (UUID, PK)
-- user_id (UUID, FK → users.id)
-- title, message (String/Text)
-- type (ENUM)
-- related_id, related_type (UUID/String)
-- is_read (Boolean)
-- priority (ENUM)
-```
-
 ### Database Relationships
 - **One-to-One**: User ↔ UmkmProfile, User ↔ StudentProfile
 - **One-to-Many**: User → Products, User → Projects, Project → Applications
@@ -536,24 +531,6 @@ socket.emit('send_message', {
 socket.on('new_message', (message) => {
   console.log('New message:', message);
 });
-
-// Typing indicators
-socket.emit('typing_start', { receiverId: 'target_user_id' });
-socket.on('user_typing', (data) => {
-  console.log(`${data.user.full_name} is typing...`);
-});
-```
-
-#### Online Status
-```javascript
-// Listen for user online/offline status
-socket.on('user_online', (data) => {
-  console.log(`${data.user.full_name} is now online`);
-});
-
-socket.on('user_offline', (data) => {
-  console.log(`User went offline at ${data.lastSeen}`);
-});
 ```
 
 ### Supported Features
@@ -562,7 +539,6 @@ socket.on('user_offline', (data) => {
 - ✅ **Online Status** - See who's online/offline
 - ✅ **Message Read Receipts** - Know when messages are read
 - ✅ **File Sharing** - Send images, documents in chat
-- ✅ **Message Replies** - Reply to specific messages
 - ✅ **Push Notifications** - Notify offline users
 
 ---
@@ -585,14 +561,7 @@ socket.on('user_offline', (data) => {
 ### File Upload Security
 - **File Type Validation** - Whitelist allowed file types
 - **File Size Limits** - Prevent large file uploads
-- **Virus Scanning** - Cloudinary automatic scanning (jika enabled)
 - **Secure URLs** - Signed URLs untuk private files
-
-### Data Protection
-- **Environment Variables** - Sensitive data di environment files
-- **Database Encryption** - Sensitive fields encrypted
-- **HTTPS Only** - Force HTTPS in production
-- **Privacy Controls** - User data privacy settings
 
 ---
 
@@ -607,7 +576,7 @@ npm test
 npm run test:coverage
 
 # Run integration tests
-./scripts/test.sh
+npm run test:integration
 
 # Run specific test file
 npm test -- tests/auth.test.js
@@ -617,28 +586,7 @@ npm test -- tests/auth.test.js
 - **Unit Tests** - Individual function testing
 - **Integration Tests** - API endpoint testing
 - **Security Tests** - Authentication & authorization
-- **Performance Tests** - Load testing dengan Artillery
-
-### Sample Test
-```javascript
-// tests/api.test.js
-describe('Authentication API', () => {
-  test('should register new user successfully', async () => {
-    const response = await request(app)
-      .post('/api/auth/register')
-      .send({
-        email: 'test@example.com',
-        password: 'password123',
-        full_name: 'Test User',
-        user_type: 'student'
-      })
-      .expect(201);
-    
-    expect(response.body.success).toBe(true);
-    expect(response.body.data.user.email).toBe('test@example.com');
-  });
-});
-```
+- **Performance Tests** - Load testing
 
 ---
 
@@ -649,22 +597,19 @@ describe('Authentication API', () => {
 #### Development
 ```bash
 # Quick deploy development environment
-./scripts/deploy.sh development
-
-# Manual Docker commands
 docker-compose up -d
+
+# Or use deployment script
+./scripts/deploy.sh development
 ```
 
 #### Production
 ```bash
 # Setup production environment
-cp .env.example .env.production
+cp .env.development .env.production
 # Edit .env.production dengan konfigurasi production
 
 # Deploy production
-./scripts/deploy.sh production
-
-# Manual production deploy
 docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 ```
 
@@ -680,12 +625,11 @@ cd umkm-mahasiswa-backend
 npm ci --production
 
 # Setup environment
-cp .env.example .env.production
+cp .env.development .env.production
 # Edit .env.production
 
 # Setup database
-npm run db:create
-npm run db:migrate
+createdb umkm_mahasiswa_db
 
 # Start with PM2
 npm install -g pm2
@@ -693,106 +637,6 @@ pm2 start src/server.js --name "umkm-api"
 pm2 startup
 pm2 save
 ```
-
-### Cloud Platform Deployment
-
-#### Heroku
-```bash
-# Install Heroku CLI
-heroku create umkm-mahasiswa-api
-heroku addons:create heroku-postgresql:mini
-heroku config:set NODE_ENV=production
-# Set other environment variables
-git push heroku main
-```
-
-#### Railway
-```bash
-# Connect GitHub repository
-# Set environment variables in dashboard
-# Deploy automatically on push
-```
-
-#### DigitalOcean App Platform
-```yaml
-# .do/app.yaml
-name: umkm-mahasiswa-api
-services:
-- name: api
-  source_dir: /
-  github:
-    repo: HaikalE/umkm-mahasiswa-backend
-    branch: main
-  build_command: npm ci
-  run_command: npm start
-  environment_slug: node-js
-  instance_count: 1
-  instance_size_slug: basic-xxs
-  envs:
-  - key: NODE_ENV
-    value: production
-databases:
-- name: db
-  engine: PG
-  version: "15"
-```
-
-### Environment Configuration
-
-#### Development
-- Single container setup
-- Hot reload enabled
-- Debug logging
-- Sample data seeded
-- Firebase & Cloudinary optional
-
-#### Staging
-- Production-like environment
-- Limited resources
-- Testing data
-
-#### Production
-- Optimized containers
-- Load balancing
-- SSL certificates
-- Monitoring enabled
-- Backup strategies
-
----
-
-## 📊 Monitoring & Analytics
-
-### Health Monitoring
-```bash
-# Health check endpoint
-curl http://localhost:3000/health
-
-# Application metrics
-curl http://localhost:3000/api/metrics
-```
-
-### Logging
-```javascript
-// Structured logging dengan Winston
-const logger = require('./utils/logger');
-
-logger.info('User registered', {
-  userId: user.id,
-  userType: user.user_type,
-  email: user.email
-});
-
-logger.error('Database connection failed', {
-  error: error.message,
-  stack: error.stack
-});
-```
-
-### Performance Monitoring
-- **Response Time** - API endpoint performance
-- **Database Queries** - Query execution time
-- **Memory Usage** - Application memory consumption
-- **Error Rates** - Error frequency dan types
 
 ---
 
@@ -813,14 +657,13 @@ git checkout -b feature/amazing-feature
 
 3. **Setup development environment**
 ```bash
-./scripts/setup.sh
+./setup.sh
 ```
 
 4. **Make changes dan test**
 ```bash
 npm run dev
 npm test
-./scripts/test.sh
 ```
 
 5. **Commit dengan conventional format**
@@ -838,13 +681,6 @@ git push origin feature/amazing-feature
 - **Prettier** - Code formatting
 - **Conventional Commits** - Commit message format
 - **JSDoc** - Function documentation
-
-### Contribution Guidelines
-- 🐛 **Bug Reports** - Use issue templates
-- ✨ **Feature Requests** - Describe use case
-- 📖 **Documentation** - Update docs untuk changes
-- 🧪 **Tests** - Add tests untuk new features
-- 🔍 **Code Review** - All PRs require review
 
 ---
 
@@ -867,11 +703,6 @@ See [LICENSE](LICENSE) file for details.
 - **Email**: dev@umkm-mahasiswa.id
 - **Instagram**: [@umkm.mahasiswa](https://instagram.com/umkm.mahasiswa)
 - **LinkedIn**: [UMKM x Mahasiswa Platform](https://linkedin.com/company/umkm-mahasiswa)
-
-### 🌟 Acknowledgments
-- **Contributors** - Thank you untuk semua kontributor
-- **Open Source Libraries** - Grateful untuk amazing tools
-- **Indonesian Tech Community** - Support dan feedback
 
 ---
 
