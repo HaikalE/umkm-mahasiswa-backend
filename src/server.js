@@ -25,8 +25,28 @@ const io = new Server(server, {
   }
 });
 
-// Initialize Firebase
-initializeFirebase();
+// Enhanced error handling for initialization
+process.on('uncaughtException', (error) => {
+  console.error('❌ Uncaught Exception:', error.message);
+  console.error('📍 Stack:', error.stack);
+  console.error('💡 Check your code for syntax errors or missing dependencies');
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('❌ Unhandled Rejection at:', promise);
+  console.error('📍 Reason:', reason);
+  console.error('💡 Check your async/await code and promise handling');
+  process.exit(1);
+});
+
+// Initialize Firebase with error handling
+try {
+  initializeFirebase();
+} catch (error) {
+  console.error('❌ Firebase initialization failed:', error.message);
+  console.log('🔄 Continuing without Firebase - using JWT authentication only');
+}
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -84,19 +104,31 @@ app.use((req, res, next) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    message: 'UMKM Mahasiswa Backend API is running',
-    timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.1.0',
-    environment: process.env.NODE_ENV || 'development',
-    database: 'connected', // Will be updated after DB connection test
-    services: {
-      firebase: process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'enabled' : 'disabled',
-      cloudinary: process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'enabled' : 'disabled'
-    }
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    await db.sequelize.authenticate();
+    
+    res.status(200).json({
+      status: 'OK',
+      message: 'UMKM Mahasiswa Backend API is running',
+      timestamp: new Date().toISOString(),
+      version: process.env.npm_package_version || '1.1.0',
+      environment: process.env.NODE_ENV || 'development',
+      database: 'connected',
+      services: {
+        firebase: process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'enabled' : 'disabled',
+        cloudinary: process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'enabled' : 'disabled'
+      }
+    });
+  } catch (error) {
+    res.status(503).json({
+      status: 'ERROR',
+      message: 'Database connection failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // API routes
@@ -175,7 +207,12 @@ app.use(errorHandler);
 // Socket.io connection handling
 io.on('connection', (socket) => {
   console.log(`👤 User connected: ${socket.id}`);
-  socketHandler(io, socket);
+  try {
+    socketHandler(io, socket);
+  } catch (error) {
+    console.error('❌ Socket handler error:', error.message);
+    socket.disconnect(true);
+  }
 });
 
 // Database sync and server start
@@ -183,9 +220,14 @@ const PORT = process.env.PORT || 3000;
 
 async function startServer() {
   try {
+    console.log('🔍 Checking database models...');
+    
     // Test database connection
     await db.sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
+    
+    // Test model loading
+    console.log('📋 Available models:', Object.keys(db).filter(key => key !== 'sequelize' && key !== 'Sequelize'));
     
     // Sync database (create tables if they don't exist)
     await db.sequelize.sync({ force: false });
@@ -193,6 +235,7 @@ async function startServer() {
     
     // Start server
     server.listen(PORT, () => {
+      console.log('🎉 =================================');
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📚 API Documentation: http://localhost:${PORT}/api/docs`);
       console.log(`🔍 Health Check: http://localhost:${PORT}/health`);
@@ -200,11 +243,24 @@ async function startServer() {
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔥 Firebase: ${process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'Enabled' : 'Disabled (dev mode)'}`);
       console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'Enabled' : 'Disabled (local storage)'}`);
+      console.log('🎉 =================================');
     });
   } catch (error) {
-    console.error('❌ Unable to start server:', error);
-    console.error('💡 Check your database configuration in .env file');
-    console.error('💡 Make sure PostgreSQL is running and accessible');
+    console.error('❌ Unable to start server:', error.message);
+    console.error('📍 Stack trace:', error.stack);
+    
+    if (error.name === 'SequelizeConnectionError') {
+      console.error('💡 Database connection failed. Possible solutions:');
+      console.error('   - Check if PostgreSQL is running');
+      console.error('   - Verify database credentials in .env file');
+      console.error('   - Ensure database exists');
+      console.error('   - Check network connectivity');
+    } else if (error.code === 'MODULE_NOT_FOUND') {
+      console.error('💡 Missing dependency. Run: npm install');
+    } else {
+      console.error('💡 Check your configuration and try again');
+    }
+    
     process.exit(1);
   }
 }
