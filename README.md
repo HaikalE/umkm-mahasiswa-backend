@@ -11,6 +11,73 @@
 
 ---
 
+## 🚀 Quick Start (Development)
+
+### **Prerequisites**
+- Node.js 18+ dan npm
+- PostgreSQL 15+
+- Git
+
+### **Langkah Cepat (5 menit setup)**
+
+```bash
+# 1. Clone repository
+git clone https://github.com/HaikalE/umkm-mahasiswa-backend.git
+cd umkm-mahasiswa-backend
+
+# 2. Install dependencies
+npm install
+
+# 3. Setup environment
+cp .env.example .env
+# Edit .env - ganti DB_PASSWORD dengan password PostgreSQL kamu
+
+# 4. Setup database (pastikan PostgreSQL sudah running)
+npm run db:create
+npm run db:migrate
+npm run db:seed  # optional - untuk data sample
+
+# 5. Start development server
+npm run dev
+
+# ✅ API akan berjalan di http://localhost:3000
+```
+
+### **Troubleshooting Database**
+
+Jika error database connection:
+
+```bash
+# Ubuntu/Debian
+sudo systemctl start postgresql
+sudo -u postgres psql
+
+# Windows (jika pakai XAMPP/PostgreSQL installer)
+# Start PostgreSQL service dari Control Panel
+
+# Buat user postgres jika belum ada
+CREATE USER postgres WITH PASSWORD 'your_password';
+ALTER USER postgres CREATEDB;
+
+# Test koneksi
+psql -U postgres -h localhost -p 5432
+```
+
+### **Test API**
+
+```bash
+# Health check
+curl http://localhost:3000/health
+
+# API docs
+curl http://localhost:3000/api/docs
+
+# Test endpoints
+curl http://localhost:3000/api/products
+```
+
+---
+
 ## 📋 Daftar Isi
 
 - [Overview](#-overview)
@@ -68,7 +135,7 @@ Platform digital yang menghubungkan **UMKM (Usaha Mikro Kecil Menengah)** dengan
 ### 🔧 Technical Features
 - ✅ **RESTful API** - Endpoints lengkap dan terstruktur
 - ✅ **Real-time Messaging** - Socket.io untuk chat real-time
-- ✅ **File Management** - Upload gambar/dokumen ke Cloudinary
+- ✅ **File Management** - Upload gambar/dokumen ke Cloudinary atau local storage
 - ✅ **Search & Filter** - Pencarian advanced dengan multiple filter
 - ✅ **Pagination** - Efficient data loading
 - ✅ **Rate Limiting** - API protection dari spam
@@ -84,13 +151,13 @@ Platform digital yang menghubungkan **UMKM (Usaha Mikro Kecil Menengah)** dengan
 - **Runtime**: Node.js 18+
 - **Framework**: Express.js 4.18+
 - **Database**: PostgreSQL 15+ dengan Sequelize ORM
-- **Authentication**: JWT + Firebase Auth
+- **Authentication**: JWT + Firebase Auth (optional)
 - **Real-time**: Socket.io 4.7+
 
 ### External Services
-- **File Storage**: Cloudinary
-- **Push Notifications**: Firebase FCM
-- **Email**: SMTP (Gmail/SendGrid)
+- **File Storage**: Cloudinary (optional - fallback ke local storage)
+- **Push Notifications**: Firebase FCM (optional)
+- **Email**: SMTP (Gmail/SendGrid) (optional)
 - **Monitoring**: Optional (Sentry, New Relic)
 
 ### DevOps & Deployment
@@ -158,8 +225,8 @@ npm run dev
 - **Node.js** 18+ dan npm
 - **PostgreSQL** 15+
 - **Docker** & Docker Compose (untuk containerized deployment)
-- **Firebase Project** (untuk authentication)
-- **Cloudinary Account** (untuk file storage)
+- **Firebase Project** (optional - untuk authentication)
+- **Cloudinary Account** (optional - untuk file storage)
 
 ### Step-by-Step Setup
 
@@ -190,12 +257,12 @@ DB_PASSWORD=your_password
 JWT_SECRET=your-super-secret-jwt-key
 JWT_REFRESH_SECRET=your-refresh-secret
 
-# Firebase (untuk authentication)
+# Firebase (untuk authentication) - Optional
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_PRIVATE_KEY=your-private-key
 FIREBASE_CLIENT_EMAIL=your-client-email
 
-# Cloudinary (untuk file upload)
+# Cloudinary (untuk file upload) - Optional
 CLOUDINARY_CLOUD_NAME=your-cloud-name
 CLOUDINARY_API_KEY=your-api-key
 CLOUDINARY_API_SECRET=your-api-secret
@@ -504,7 +571,7 @@ socket.on('user_offline', (data) => {
 
 ### Authentication & Authorization
 - **JWT Tokens** - Stateless authentication dengan refresh mechanism
-- **Firebase Auth** - Google, email/password login
+- **Firebase Auth** - Google, email/password login (optional)
 - **Role-based Access** - UMKM vs Student permissions
 - **Password Security** - bcrypt hashing dengan salt
 
@@ -518,7 +585,7 @@ socket.on('user_offline', (data) => {
 ### File Upload Security
 - **File Type Validation** - Whitelist allowed file types
 - **File Size Limits** - Prevent large file uploads
-- **Virus Scanning** - Cloudinary automatic scanning
+- **Virus Scanning** - Cloudinary automatic scanning (jika enabled)
 - **Secure URLs** - Signed URLs untuk private files
 
 ### Data Protection
@@ -677,6 +744,7 @@ databases:
 - Hot reload enabled
 - Debug logging
 - Sample data seeded
+- Firebase & Cloudinary optional
 
 #### Staging
 - Production-like environment
