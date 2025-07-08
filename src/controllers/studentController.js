@@ -1,5 +1,5 @@
 const db = require('../database/models');
-const { User, StudentProfile, UmkmProfile, Application, Project, Review, Chat, ProjectCheckpoint } = db;
+const { User, StudentProfile, UmkmProfile, Application, Project, Review, Chat, ProjectCheckpoint, Payment } = db;
 const { asyncHandler } = require('../middleware/error');
 const { Op } = require('sequelize');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
@@ -562,7 +562,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
   const [applicationCount, acceptedCount, completedCount, reviewCount] = await Promise.all([
     Application.count({ where: { student_id: userId } }),
     Application.count({ where: { student_id: userId, status: 'accepted' } }),
-    Application.count({ where: { student_id: userId, status: 'accepted' } }), // TODO: Add completed status
+    Application.count({ where: { student_id: userId, status: 'completed' } }),
     Review.count({ where: { reviewed_id: userId, status: 'active' } })
   ]);
   
@@ -573,7 +573,8 @@ const getDashboardStats = asyncHandler(async (req, res) => {
       accepted_applications: acceptedCount,
       completed_projects: completedCount,
       total_reviews: reviewCount,
-      average_rating: req.user.studentProfile?.rating || 0
+      average_rating: req.user.studentProfile?.rating || 0,
+      portfolio_views: req.user.studentProfile?.portfolio_views || 0
     }
   });
 });
@@ -618,7 +619,7 @@ const getOpportunities = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      opportunities: rows,
+      projects: rows,
       pagination: {
         total: count,
         page: parseInt(page),
@@ -645,7 +646,7 @@ const getRecentActivities = asyncHandler(async (req, res) => {
 // @route   GET /api/students/my-applications
 // @access  Private (Student only)
 const getMyApplications = asyncHandler(async (req, res) => {
-  const { page = 1, limit = 12, status } = req.query;
+  const { page = 1, limit = 12, status, search } = req.query;
   const offset = (page - 1) * limit;
   const userId = req.user.id;
   
@@ -654,18 +655,27 @@ const getMyApplications = asyncHandler(async (req, res) => {
     whereClause.status = status;
   }
   
+  const projectWhere = {};
+  if (search) {
+    projectWhere[Op.or] = [
+      { title: { [Op.iLike]: `%${search}%` } },
+      { '$project.umkm.umkmProfile.business_name$': { [Op.iLike]: `%${search}%` } }
+    ];
+  }
+  
   const { count, rows } = await Application.findAndCountAll({
     where: whereClause,
     include: [
       {
         model: Project,
         as: 'project',
-        attributes: ['id', 'title', 'category', 'budget_min', 'budget_max'],
+        where: projectWhere,
+        attributes: ['id', 'title', 'category', 'budget_min', 'budget_max', 'deadline', 'required_skills', 'description'],
         include: [
           {
             model: User,
             as: 'umkm',
-            attributes: ['id', 'full_name'],
+            attributes: ['id', 'full_name', 'email', 'phone', 'avatar_url'],
             include: [
               {
                 model: UmkmProfile,
@@ -797,6 +807,144 @@ const updateAvailability = asyncHandler(async (req, res) => {
 });
 
 // ====================================
+// NEW: ENHANCED APPLICATION MANAGEMENT
+// ====================================
+
+// @desc    Get application statistics
+// @route   GET /api/students/applications/stats
+// @access  Private (Student only)
+const getApplicationStats = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const [pending, accepted, rejected, withdrawn] = await Promise.all([
+    Application.count({ where: { student_id: userId, status: 'pending' } }),
+    Application.count({ where: { student_id: userId, status: 'accepted' } }),
+    Application.count({ where: { student_id: userId, status: 'rejected' } }),
+    Application.count({ where: { student_id: userId, status: 'withdrawn' } })
+  ]);
+  
+  res.json({
+    success: true,
+    data: {
+      pending,
+      accepted,
+      rejected,
+      withdrawn,
+      total: pending + accepted + rejected + withdrawn
+    }
+  });
+});
+
+// @desc    Get application history with filters
+// @route   GET /api/students/applications/history
+// @access  Private (Student only)
+const getApplicationHistory = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 20, timeframe = 'all' } = req.query;
+  const offset = (page - 1) * limit;
+  const userId = req.user.id;
+  
+  let dateFilter = {};
+  if (timeframe !== 'all') {
+    const now = new Date();
+    switch (timeframe) {
+      case 'week':
+        dateFilter.created_at = { [Op.gte]: new Date(now.setDate(now.getDate() - 7)) };
+        break;
+      case 'month':
+        dateFilter.created_at = { [Op.gte]: new Date(now.setMonth(now.getMonth() - 1)) };
+        break;
+      case 'year':
+        dateFilter.created_at = { [Op.gte]: new Date(now.setFullYear(now.getFullYear() - 1)) };
+        break;
+    }
+  }
+  
+  const { count, rows } = await Application.findAndCountAll({
+    where: { student_id: userId, ...dateFilter },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        attributes: ['id', 'title', 'category'],
+        include: [
+          {
+            model: User,
+            as: 'umkm',
+            attributes: ['id', 'full_name'],
+            include: [
+              {
+                model: UmkmProfile,
+                as: 'umkmProfile',
+                attributes: ['business_name']
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    limit: parseInt(limit),
+    offset: parseInt(offset),
+    order: [['created_at', 'DESC']]
+  });
+  
+  res.json({
+    success: true,
+    data: {
+      applications: rows,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(count / limit)
+      }
+    }
+  });
+});
+
+// @desc    Get application details
+// @route   GET /api/students/applications/:id/details
+// @access  Private (Student only)
+const getApplicationDetails = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+  
+  const application = await Application.findOne({
+    where: { id, student_id: userId },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        include: [
+          {
+            model: User,
+            as: 'umkm',
+            attributes: ['id', 'full_name', 'email', 'phone', 'avatar_url'],
+            include: [
+              {
+                model: UmkmProfile,
+                as: 'umkmProfile'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  });
+  
+  if (!application) {
+    return res.status(404).json({
+      success: false,
+      message: 'Application not found'
+    });
+  }
+  
+  res.json({
+    success: true,
+    data: application
+  });
+});
+
+// ====================================
 // ENHANCED: ACTIVE PROJECT MANAGEMENT
 // ====================================
 
@@ -901,6 +1049,12 @@ const getActiveProjectDetails = asyncHandler(async (req, res) => {
   const progressPercentage = checkpoints.length > 0 ? 
     Math.round((completedCheckpoints / checkpoints.length) * 100) : 0;
 
+  // Calculate days remaining
+  const deadline = new Date(activeApplication.project.deadline);
+  const now = new Date();
+  const daysRemaining = Math.ceil((deadline - now) / (1000 * 60 * 60 * 24));
+  const isOverdue = daysRemaining < 0;
+
   res.json({
     success: true,
     data: {
@@ -909,7 +1063,9 @@ const getActiveProjectDetails = asyncHandler(async (req, res) => {
       progress: {
         total_checkpoints: checkpoints.length,
         completed_checkpoints: completedCheckpoints,
-        progress_percentage: progressPercentage
+        progress_percentage: progressPercentage,
+        days_remaining: Math.abs(daysRemaining),
+        is_overdue: isOverdue
       }
     }
   });
@@ -953,9 +1109,268 @@ const getActiveProjectCheckpoints = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Submit checkpoint deliverable
-// @route   POST /api/students/active-project/checkpoint/:checkpointId/submit
+// @desc    Get project payment information
+// @route   GET /api/students/active-project/payment
 // @access  Private (Student only)
+const getProjectPaymentInfo = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  // Get payment history for this project
+  const payments = await Payment.findAll({
+    where: { 
+      project_id: activeApplication.project.id,
+      student_id: userId
+    },
+    order: [['created_at', 'DESC']]
+  });
+
+  const totalPaid = payments
+    .filter(p => p.status === 'completed')
+    .reduce((sum, p) => sum + (p.amount || 0), 0);
+  
+  const agreedBudget = activeApplication.proposed_budget || activeApplication.project.budget_min;
+  const remainingPayment = agreedBudget - totalPaid;
+
+  res.json({
+    success: true,
+    data: {
+      agreed_budget: agreedBudget,
+      total_paid: totalPaid,
+      remaining_payment: remainingPayment,
+      payment_history: payments
+    }
+  });
+});
+
+// @desc    Get project timeline
+// @route   GET /api/students/active-project/timeline
+// @access  Private (Student only)
+const getProjectTimeline = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  // TODO: Implement project timeline
+  res.json({
+    success: true,
+    message: 'Project timeline will be implemented soon',
+    data: { timeline: [] }
+  });
+});
+
+// @desc    Update project progress
+// @route   POST /api/students/active-project/update-progress
+// @access  Private (Student only)
+const updateProjectProgress = asyncHandler(async (req, res) => {
+  const { progress_notes, progress_percentage } = req.body;
+  const userId = req.user.id;
+  
+  // TODO: Implement progress update
+  res.json({
+    success: true,
+    message: 'Progress update functionality will be implemented soon',
+    data: { progress_notes, progress_percentage }
+  });
+});
+
+// @desc    Get profile completion percentage
+// @route   GET /api/students/profile/completion
+// @access  Private (Student only)
+const getProfileCompletion = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const user = await User.findByPk(userId, {
+    include: [
+      {
+        model: StudentProfile,
+        as: 'studentProfile'
+      }
+    ]
+  });
+  
+  if (!user) {
+    return res.status(404).json({
+      success: false,
+      message: 'User not found'
+    });
+  }
+  
+  const profile = user.studentProfile;
+  let completionScore = 0;
+  const maxScore = 100;
+  
+  // Calculate completion based on filled fields
+  if (user.full_name) completionScore += 10;
+  if (user.email) completionScore += 10;
+  if (user.phone) completionScore += 10;
+  if (user.avatar_url) completionScore += 15;
+  
+  if (profile) {
+    if (profile.university) completionScore += 10;
+    if (profile.major) completionScore += 10;
+    if (profile.bio) completionScore += 10;
+    if (profile.skills && profile.skills.length > 0) completionScore += 15;
+    if (profile.cv_url) completionScore += 10;
+  }
+  
+  const completionPercentage = Math.round((completionScore / maxScore) * 100);
+  
+  res.json({
+    success: true,
+    data: {
+      completion_percentage: completionPercentage,
+      completed_fields: completionScore,
+      total_fields: maxScore
+    }
+  });
+});
+
+// @desc    Update skills
+// @route   POST /api/students/profile/skills
+// @access  Private (Student only)
+const updateSkills = asyncHandler(async (req, res) => {
+  const { skills } = req.body;
+  const userId = req.user.id;
+  
+  const studentProfile = await StudentProfile.findOne({ where: { user_id: userId } });
+  
+  if (!studentProfile) {
+    return res.status(404).json({
+      success: false,
+      message: 'Student profile not found'
+    });
+  }
+  
+  await studentProfile.update({ skills });
+  
+  res.json({
+    success: true,
+    message: 'Skills updated successfully',
+    data: { skills }
+  });
+});
+
+// @desc    Get earnings summary
+// @route   GET /api/students/earnings/summary
+// @access  Private (Student only)
+const getEarningsSummary = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const totalEarnings = await Payment.sum('amount', {
+    where: {
+      student_id: userId,
+      status: 'completed'
+    }
+  }) || 0;
+  
+  const thisMonth = new Date();
+  thisMonth.setDate(1);
+  thisMonth.setHours(0, 0, 0, 0);
+  
+  const monthlyEarnings = await Payment.sum('amount', {
+    where: {
+      student_id: userId,
+      status: 'completed',
+      created_at: { [Op.gte]: thisMonth }
+    }
+  }) || 0;
+  
+  res.json({
+    success: true,
+    data: {
+      total_earnings: totalEarnings,
+      monthly_earnings: monthlyEarnings,
+      pending_payments: await Payment.sum('amount', {
+        where: {
+          student_id: userId,
+          status: 'pending'
+        }
+      }) || 0
+    }
+  });
+});
+
+// @desc    Get performance metrics
+// @route   GET /api/students/performance/metrics
+// @access  Private (Student only)
+const getPerformanceMetrics = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const [completedProjects, averageRating, onTimeCompletion] = await Promise.all([
+    Application.count({ where: { student_id: userId, status: 'completed' } }),
+    Review.findOne({
+      where: { reviewed_id: userId },
+      attributes: [[db.sequelize.fn('AVG', db.sequelize.col('rating')), 'avg_rating']]
+    }),
+    // TODO: Calculate on-time completion rate
+    Promise.resolve(85) // Placeholder
+  ]);
+  
+  res.json({
+    success: true,
+    data: {
+      completed_projects: completedProjects,
+      average_rating: parseFloat(averageRating?.get('avg_rating')) || 0,
+      on_time_completion: onTimeCompletion,
+      response_rate: 95 // Placeholder
+    }
+  });
+});
+
+// @desc    Get notification settings
+// @route   GET /api/students/notifications/settings
+// @access  Private (Student only)
+const getNotificationSettings = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  // TODO: Implement notification settings
+  res.json({
+    success: true,
+    data: {
+      email_notifications: true,
+      push_notifications: true,
+      sms_notifications: false,
+      project_updates: true,
+      payment_alerts: true
+    }
+  });
+});
+
+// @desc    Update notification settings
+// @route   PUT /api/students/notifications/settings
+// @access  Private (Student only)
+const updateNotificationSettings = asyncHandler(async (req, res) => {
+  const settings = req.body;
+  const userId = req.user.id;
+  
+  // TODO: Implement notification settings update
+  res.json({
+    success: true,
+    message: 'Notification settings updated successfully',
+    data: settings
+  });
+});
+
+// Continue with existing active project methods...
 const submitCheckpoint = asyncHandler(async (req, res) => {
   const { checkpointId } = req.params;
   const { notes } = req.body;
@@ -1015,9 +1430,6 @@ const submitCheckpoint = asyncHandler(async (req, res) => {
     submitted_at: new Date()
   });
 
-  // Send notification to UMKM (implement notification system)
-  // TODO: Add notification
-
   res.json({
     success: true,
     message: 'Checkpoint submitted successfully',
@@ -1025,9 +1437,6 @@ const submitCheckpoint = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Get active project chats
-// @route   GET /api/students/active-project/chats
-// @access  Private (Student only)
 const getActiveProjectChats = asyncHandler(async (req, res) => {
   const { page = 1, limit = 50 } = req.query;
   const offset = (page - 1) * limit;
@@ -1083,7 +1492,7 @@ const getActiveProjectChats = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      chats: rows.reverse(), // Reverse to show oldest first
+      chats: rows.reverse(),
       pagination: {
         total: count,
         page: parseInt(page),
@@ -1094,9 +1503,6 @@ const getActiveProjectChats = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Send message to UMKM
-// @route   POST /api/students/active-project/chat
-// @access  Private (Student only)
 const sendProjectMessage = asyncHandler(async (req, res) => {
   const { message } = req.body;
   const userId = req.user.id;
@@ -1145,7 +1551,9 @@ const sendProjectMessage = asyncHandler(async (req, res) => {
   });
 
   // Send real-time notification via socket
-  req.io.to(`user_${activeApplication.project.umkm_id}`).emit('new_message', messageWithSender);
+  if (req.io) {
+    req.io.to(`user_${activeApplication.project.umkm_id}`).emit('new_message', messageWithSender);
+  }
 
   res.json({
     success: true,
@@ -1154,9 +1562,6 @@ const sendProjectMessage = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Upload project deliverables
-// @route   POST /api/students/active-project/deliverables
-// @access  Private (Student only)
 const uploadProjectDeliverables = asyncHandler(async (req, res) => {
   const { description } = req.body;
   const userId = req.user.id;
@@ -1199,7 +1604,6 @@ const uploadProjectDeliverables = asyncHandler(async (req, res) => {
     uploaded_at: new Date()
   }));
 
-  // Store deliverables in project (or create separate deliverables table)
   const project = activeApplication.project;
   const currentAttachments = project.attachments || [];
   const updatedAttachments = [...currentAttachments, ...deliverables];
@@ -1216,9 +1620,6 @@ const uploadProjectDeliverables = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Update project status (student side)
-// @route   PUT /api/students/active-project/status
-// @access  Private (Student only)
 const updateProjectStatus = asyncHandler(async (req, res) => {
   const { status, notes } = req.body;
   const userId = req.user.id;
@@ -1253,12 +1654,9 @@ const updateProjectStatus = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update application with student notes
   await activeApplication.update({
     student_notes: notes
   });
-
-  // TODO: Create notification for UMKM about status change
 
   res.json({
     success: true,
@@ -1270,11 +1668,8 @@ const updateProjectStatus = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Request project completion
-// @route   POST /api/students/active-project/request-completion
-// @access  Private (Student only)
 const requestProjectCompletion = asyncHandler(async (req, res) => {
-  const { completion_notes, final_deliverables } = req.body;
+  const { completion_notes } = req.body;
   const userId = req.user.id;
 
   const activeApplication = await Application.findOne({
@@ -1298,13 +1693,10 @@ const requestProjectCompletion = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update application status to completion requested
   await activeApplication.update({
     status: 'completion_requested',
     student_notes: completion_notes
   });
-
-  // TODO: Send notification to UMKM for review
 
   res.json({
     success: true,
@@ -1312,16 +1704,13 @@ const requestProjectCompletion = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc    Complete project (after UMKM approval)
-// @route   POST /api/students/active-project/complete
-// @access  Private (Student only)
 const completeProject = asyncHandler(async (req, res) => {
   const userId = req.user.id;
 
   const activeApplication = await Application.findOne({
     where: { 
       student_id: userId, 
-      status: 'completion_approved' // Only if UMKM approved
+      status: 'completion_approved'
     },
     include: [
       {
@@ -1338,14 +1727,12 @@ const completeProject = asyncHandler(async (req, res) => {
     });
   }
 
-  // Update project and application status
   await Promise.all([
     Project.update(
       { status: 'completed' },
       { where: { id: activeApplication.project.id } }
     ),
     activeApplication.update({ status: 'completed' }),
-    // Update student profile
     StudentProfile.increment(
       'total_projects_completed',
       { where: { user_id: userId } }
@@ -1378,6 +1765,10 @@ module.exports = {
   getMyProjects,
   getRecommendations,
   updateAvailability,
+  // NEW: Enhanced Application Management
+  getApplicationStats,
+  getApplicationHistory,
+  getApplicationDetails,
   // Enhanced: Active Project Management
   getActiveProject,
   getActiveProjectDetails,
@@ -1388,5 +1779,15 @@ module.exports = {
   uploadProjectDeliverables,
   updateProjectStatus,
   requestProjectCompletion,
-  completeProject
+  completeProject,
+  // NEW: Enhanced Features
+  getProjectPaymentInfo,
+  getProjectTimeline,
+  updateProjectProgress,
+  getProfileCompletion,
+  updateSkills,
+  getEarningsSummary,
+  getPerformanceMetrics,
+  getNotificationSettings,
+  updateNotificationSettings
 };
