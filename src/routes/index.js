@@ -20,6 +20,9 @@ const checkpointRoutes = require('./checkpoints');
 const matchingRoutes = require('./matching');
 const pricingRoutes = require('./pricing');
 
+// ENHANCED: Active Project Management Routes
+const activeProjectRoutes = require('./activeProject');
+
 // API version prefix
 router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
@@ -39,11 +42,14 @@ router.use('/checkpoints', checkpointRoutes);
 router.use('/matching', matchingRoutes);
 router.use('/pricing', pricingRoutes);
 
+// ENHANCED: Active Project Management
+router.use('/students/active-project', activeProjectRoutes);
+
 // API info endpoint
 router.get('/', (req, res) => {
   res.json({
     message: 'UMKM Mahasiswa Platform API',
-    version: '1.1.0',
+    version: '1.2.0',
     status: 'active',
     endpoints: {
       // Core endpoints
@@ -62,7 +68,9 @@ router.get('/', (req, res) => {
       payments: '/api/payments',
       checkpoints: '/api/checkpoints',
       matching: '/api/matching',
-      pricing: '/api/pricing'
+      pricing: '/api/pricing',
+      // NEW: Active Project Management
+      activeProject: '/api/students/active-project'
     },
     features: {
       payment_system: '50-50 split payment with escrow',
@@ -71,7 +79,11 @@ router.get('/', (req, res) => {
       pricing_intelligence: 'Market-based price suggestions',
       real_time_chat: 'Socket.io powered messaging',
       file_uploads: 'Cloudinary integration for media',
-      notifications: 'Real-time push notifications'
+      notifications: 'Real-time push notifications',
+      // NEW FEATURES
+      active_project_management: 'Comprehensive project tracking for ongoing work',
+      deliverable_submission: 'File upload and progress tracking system',
+      milestone_management: 'Checkpoint-based project progress'
     },
     documentation: '/api/docs'
   });
