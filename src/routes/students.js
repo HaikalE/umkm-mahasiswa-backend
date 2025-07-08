@@ -35,6 +35,20 @@ router.get('/my-applications', validatePagination, studentController.getMyApplic
 router.get('/my-projects', validatePagination, studentController.getMyProjects);
 router.get('/recommendations', validatePagination, studentController.getRecommendations);
 
+// ENHANCED: Active Project Management
+router.get('/active-project', studentController.getActiveProject);
+router.get('/active-project/details', studentController.getActiveProjectDetails);
+router.get('/active-project/checkpoints', studentController.getActiveProjectCheckpoints);
+router.post('/active-project/checkpoint/:checkpointId/submit', portfolioUpload.array('deliverables', 5), studentController.submitCheckpoint);
+router.get('/active-project/chats', studentController.getActiveProjectChats);
+router.post('/active-project/chat', studentController.sendProjectMessage);
+router.post('/active-project/deliverables', portfolioUpload.array('files', 10), studentController.uploadProjectDeliverables);
+router.put('/active-project/status', studentController.updateProjectStatus);
+
+// Project completion
+router.post('/active-project/complete', studentController.completeProject);
+router.post('/active-project/request-completion', studentController.requestProjectCompletion);
+
 // Availability management
 router.put('/availability', studentController.updateAvailability);
 
