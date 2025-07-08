@@ -279,8 +279,33 @@ async function startServer() {
     // Test model loading
     console.log('📋 Available models:', Object.keys(db).filter(key => key !== 'sequelize' && key !== 'Sequelize'));
     
-    // Sync database (create tables if they don't exist)
-    await db.sequelize.sync({ force: false });
+    // Enhanced Database sync with better error handling
+    console.log('🔄 Synchronizing database schema...');
+    
+    // Different sync strategies based on environment
+    const syncOptions = {
+      // Never force in production
+      force: process.env.DB_FORCE_SYNC === 'true' && isDevelopment,
+      // Use alter in development to update schema without data loss
+      alter: isDevelopment && process.env.DB_DISABLE_ALTER !== 'true',
+      // Enable logging for debugging
+      logging: isDevelopment ? console.log : false
+    };
+
+    console.log('📊 Sync options:', {
+      environment: isDevelopment ? 'development' : 'production',
+      force: syncOptions.force,
+      alter: syncOptions.alter,
+      logging: !!syncOptions.logging
+    });
+
+    if (syncOptions.force) {
+      console.log('⚠️  WARNING: Database will be recreated (all data will be lost)');
+    } else if (syncOptions.alter) {
+      console.log('🔧 Schema changes will be applied automatically (data preserved)');
+    }
+
+    await db.sequelize.sync(syncOptions);
     console.log('✅ Database synchronized successfully.');
     
     // Start server
@@ -308,6 +333,11 @@ async function startServer() {
       console.error('   - Check network connectivity');
     } else if (error.code === 'MODULE_NOT_FOUND') {
       console.error('💡 Missing dependency. Run: npm install');
+    } else if (error.message.includes('column') && error.message.includes('does not exist')) {
+      console.error('💡 Database schema mismatch. Try these solutions:');
+      console.error('   1. Set DB_DISABLE_ALTER=false in .env to enable automatic schema updates');
+      console.error('   2. Run: npm run migrate to manually update schema');
+      console.error('   3. For development: Set DB_FORCE_SYNC=true to recreate database (WARNING: data loss)');
     } else {
       console.error('💡 Check your configuration and try again');
     }
