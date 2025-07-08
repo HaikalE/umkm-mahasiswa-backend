@@ -27,7 +27,7 @@ const generateTokens = (userId) => {
 // @route   POST /api/auth/register
 // @access  Public
 const register = asyncHandler(async (req, res) => {
-  const { email, password, full_name, user_type, phone, firebase_uid } = req.body;
+  const { email, password, full_name, user_type, phone, firebase_uid, business_type } = req.body;
 
   // Check if user already exists
   const existingUser = await User.findOne({ where: { email } });
@@ -59,7 +59,8 @@ const register = asyncHandler(async (req, res) => {
   if (user_type === 'umkm') {
     await UmkmProfile.create({
       user_id: user.id,
-      business_name: full_name // Default business name
+      business_name: full_name, // Default business name
+      business_type: business_type || 'lainnya' // Use provided business_type or default to 'lainnya'
     });
   } else if (user_type === 'student') {
     await StudentProfile.create({
@@ -244,7 +245,7 @@ const verifyFirebaseToken = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/firebase-login
 // @access  Public
 const firebaseLogin = asyncHandler(async (req, res) => {
-  const { firebaseToken, user_type, full_name } = req.body;
+  const { firebaseToken, user_type, full_name, business_type } = req.body;
 
   if (!firebaseToken) {
     return res.status(400).json({
@@ -286,7 +287,8 @@ const firebaseLogin = asyncHandler(async (req, res) => {
       if (user_type === 'umkm') {
         await UmkmProfile.create({
           user_id: user.id,
-          business_name: full_name || 'Business'
+          business_name: full_name || 'Business',
+          business_type: business_type || 'lainnya' // Use provided business_type or default to 'lainnya'
         });
       } else {
         await StudentProfile.create({
