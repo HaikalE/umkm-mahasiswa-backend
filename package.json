@@ -21,6 +21,8 @@
     "db:fix": "npm run db:migrate:projects",
     "db:fix:payments": "npm run db:migrate:payments",
     "db:reset:payments": "node src/database/reset-payments-table.js",
+    "db:emergency:payments": "node src/database/emergency-cleanup-payments.js",
+    "db:nuclear": "npm run db:emergency:payments",
     "setup": "./scripts/setup.sh",
     "deploy": "./scripts/deploy.sh",
     "deploy:prod": "./scripts/deploy.sh production",
