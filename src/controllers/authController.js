@@ -95,10 +95,8 @@ const register = asyncHandler(async (req, res) => {
     message: 'User registered successfully',
     data: {
       user: userWithProfile,
-      tokens: {
-        accessToken,
-        refreshToken
-      }
+      token: accessToken, // FIXED: Changed from tokens to token for frontend compatibility
+      refreshToken: refreshToken
     }
   });
 });
@@ -166,10 +164,8 @@ const login = asyncHandler(async (req, res) => {
     message: 'Login successful',
     data: {
       user: userResponse,
-      tokens: {
-        accessToken,
-        refreshToken
-      }
+      token: accessToken, // FIXED: Changed from tokens to token for frontend compatibility
+      refreshToken: refreshToken
     }
   });
 });
@@ -190,10 +186,8 @@ const refreshToken = asyncHandler(async (req, res) => {
     success: true,
     message: 'Token refreshed successfully',
     data: {
-      tokens: {
-        accessToken,
-        refreshToken: newRefreshToken
-      }
+      token: accessToken, // FIXED: Changed from tokens to token for frontend compatibility
+      refreshToken: newRefreshToken
     }
   });
 });
@@ -344,10 +338,8 @@ const firebaseLogin = asyncHandler(async (req, res) => {
       message: 'Firebase login successful',
       data: {
         user: userResponse,
-        tokens: {
-          accessToken,
-          refreshToken
-        }
+        token: accessToken, // FIXED: Changed from tokens to token for frontend compatibility
+        refreshToken: refreshToken
       }
     });
   } catch (error) {
