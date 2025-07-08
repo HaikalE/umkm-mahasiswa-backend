@@ -19,15 +19,6 @@ const socketHandler = require('./socket/socketHandler');
 const app = express();
 const server = createServer(app);
 
-// Enhanced CORS configuration for Socket.io
-const io = new Server(server, {
-  cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-
 // Enhanced error handling for initialization
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error.message);
@@ -64,31 +55,61 @@ app.use(helmet({
 }));
 app.use(compression());
 
-// Enhanced CORS configuration - FIXED for preflight requests
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [
-      'http://localhost:3000', 
-      'http://localhost:3001', 
-      'http://localhost:8080', 
-      'http://localhost:5173'
-    ];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-firebase-token'],
-  credentials: true,
-  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
-};
+// CORS configuration - FIXED: Simplified for development
+const isDevelopment = process.env.NODE_ENV !== 'production';
+
+let corsOptions;
+
+if (isDevelopment) {
+  // Development: Allow all localhost origins
+  corsOptions = {
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Allow all localhost origins in development
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+      
+      // Check environment variable for additional origins
+      const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [];
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      
+      console.log(`❌ CORS blocked origin: ${origin}`);
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-firebase-token'],
+    credentials: true,
+    optionsSuccessStatus: 200
+  };
+} else {
+  // Production: Strict CORS
+  corsOptions = {
+    origin: process.env.CORS_ORIGIN?.split(',') || false,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-firebase-token'],
+    credentials: true,
+    optionsSuccessStatus: 200
+  };
+}
+
+console.log(`🔗 CORS Configuration: ${isDevelopment ? 'Development (Permissive)' : 'Production (Strict)'}`);
+console.log(`🔗 Allowed Origins: ${isDevelopment ? 'All localhost/* origins + ' + (process.env.CORS_ORIGIN || 'none') : process.env.CORS_ORIGIN || 'none'}`);
+
 app.use(cors(corsOptions));
+
+// Enhanced CORS for Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: isDevelopment ? true : (process.env.CORS_ORIGIN?.split(',') || false),
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
 
 // Handle preflight requests explicitly
 app.options('*', cors(corsOptions));
@@ -140,7 +161,8 @@ app.get('/health', async (req, res) => {
       environment: process.env.NODE_ENV || 'development',
       database: 'connected',
       cors: {
-        allowedOrigins: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+        mode: isDevelopment ? 'development (permissive)' : 'production (strict)',
+        allowedOrigins: isDevelopment ? 'all localhost/* + custom origins' : process.env.CORS_ORIGIN?.split(',') || [],
         status: 'configured'
       },
       services: {
@@ -223,7 +245,7 @@ app.get('/api/docs', (req, res) => {
       authentication: 'Include Authorization: Bearer <token> header for protected endpoints',
       fileUploads: 'Files are stored locally in uploads/ directory if Cloudinary is not configured',
       realtime: 'Socket.io connection available at same host for real-time features',
-      cors: 'CORS is configured to allow requests from development ports: 3000, 3001, 8080, 5173'
+      cors: isDevelopment ? 'Development mode: All localhost origins allowed' : 'Production mode: Strict origin validation'
     }
   });
 });
@@ -271,7 +293,7 @@ async function startServer() {
       console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔥 Firebase: ${process.env.FIREBASE_PROJECT_ID !== 'your-firebase-project-id' ? 'Enabled' : 'Disabled (dev mode)'}`);
       console.log(`☁️  Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME !== 'your-cloudinary-name' ? 'Enabled' : 'Disabled (local storage)'}`);
-      console.log(`🔗 CORS Origins: ${process.env.CORS_ORIGIN || 'localhost:3000,3001,8080,5173'}`);
+      console.log(`🔗 CORS Mode: ${isDevelopment ? 'Development (Permissive)' : 'Production (Strict)'}`);
       console.log('🎉 =================================');
     });
   } catch (error) {
