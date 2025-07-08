@@ -31,9 +31,10 @@ module.exports = (sequelize, DataTypes) => {
       }
     },
     payment_phase: {
-      type: DataTypes.ENUM('initial', 'final'),
+      type: DataTypes.STRING(20),  // Changed from ENUM to STRING to avoid conflicts
       allowNull: false,
-      comment: '50% awal atau 50% akhir'
+      defaultValue: 'initial',
+      comment: '50% awal atau 50% akhir - values: initial, final'
     },
     amount: {
       type: DataTypes.DECIMAL(15, 2),
@@ -47,15 +48,15 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'IDR'
     },
     payment_method: {
-      type: DataTypes.ENUM(
-        'bank_transfer', 'e_wallet', 'credit_card', 
-        'virtual_account', 'qris', 'cash'
-      ),
-      allowNull: false
+      type: DataTypes.STRING(50),  // Changed from ENUM to STRING
+      allowNull: false,
+      defaultValue: 'bank_transfer',
+      comment: 'bank_transfer, e_wallet, credit_card, virtual_account, qris, cash'
     },
     payment_gateway: {
-      type: DataTypes.ENUM('midtrans', 'xendit', 'doku', 'manual'),
-      defaultValue: 'midtrans'
+      type: DataTypes.STRING(50),  // Changed from ENUM to STRING
+      defaultValue: 'midtrans',
+      comment: 'midtrans, xendit, doku, manual'
     },
     transaction_id: {
       type: DataTypes.STRING,
@@ -68,11 +69,9 @@ module.exports = (sequelize, DataTypes) => {
       comment: 'URL bukti pembayaran'
     },
     status: {
-      type: DataTypes.ENUM(
-        'pending', 'processing', 'completed', 
-        'failed', 'cancelled', 'refunded'
-      ),
-      defaultValue: 'pending'
+      type: DataTypes.STRING(50),  // Changed from ENUM to STRING
+      defaultValue: 'pending',
+      comment: 'pending, processing, completed, failed, cancelled, refunded'
     },
     due_date: {
       type: DataTypes.DATE,
@@ -94,7 +93,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     net_amount: {
       type: DataTypes.DECIMAL(15, 2),
-      allowNull: false,
+      allowNull: true,  // Made nullable to avoid calculation issues
       comment: 'Amount setelah dipotong fee'
     },
     notes: {
@@ -102,75 +101,38 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     }
   }, {
+    // Minimal indexes only - no complex constraints
     indexes: [
       {
-        fields: ['project_id'],
-        name: 'payments_project_id_idx'
+        fields: ['project_id']
       },
       {
-        fields: ['umkm_id'],
-        name: 'payments_umkm_id_idx'
+        fields: ['umkm_id']
       },
       {
-        fields: ['student_id'],
-        name: 'payments_student_id_idx'
+        fields: ['student_id']
       },
       {
-        fields: ['status'],
-        name: 'payments_status_idx'
+        fields: ['status']
       },
       {
-        fields: ['payment_phase'],
-        name: 'payments_payment_phase_idx'
-      },
-      {
-        fields: ['due_date'],
-        name: 'payments_due_date_idx'
-      },
-      {
-        fields: ['created_at'],
-        name: 'payments_created_at_idx'
-      },
-      {
-        fields: ['payment_method'],
-        name: 'payments_payment_method_idx'
-      },
-      {
-        fields: ['payment_gateway'],
-        name: 'payments_payment_gateway_idx'
+        fields: ['payment_phase']
       }
     ],
-    // Move unique constraint to model level validation instead of index
-    validate: {
-      // Ensure only one payment per phase per project
-      uniqueProjectPaymentPhase() {
-        return sequelize.models.payments.findOne({
-          where: {
-            project_id: this.project_id,
-            payment_phase: this.payment_phase,
-            id: { [sequelize.Sequelize.Op.ne]: this.id }
-          }
-        }).then(payment => {
-          if (payment) {
-            throw new Error(`Payment for ${this.payment_phase} phase already exists for this project`);
-          }
-        });
-      }
-    },
+    // Removed all problematic validations and hooks
+    // We'll handle uniqueness at application level if needed
     hooks: {
       beforeCreate: async (payment) => {
-        // Calculate net_amount if not provided
-        if (!payment.net_amount && payment.amount && payment.admin_fee) {
-          const feeAmount = (payment.amount * payment.admin_fee) / 100;
+        // Simple net_amount calculation
+        if (!payment.net_amount && payment.amount) {
+          const feeAmount = payment.admin_fee ? (payment.amount * payment.admin_fee) / 100 : 0;
           payment.net_amount = payment.amount - feeAmount;
-        } else if (!payment.net_amount) {
-          payment.net_amount = payment.amount;
         }
       },
       beforeUpdate: async (payment) => {
-        // Recalculate net_amount if amount or admin_fee changed
+        // Simple net_amount recalculation
         if (payment.changed('amount') || payment.changed('admin_fee')) {
-          const feeAmount = (payment.amount * payment.admin_fee) / 100;
+          const feeAmount = payment.admin_fee ? (payment.amount * payment.admin_fee) / 100 : 0;
           payment.net_amount = payment.amount - feeAmount;
         }
       }
