@@ -1,5 +1,5 @@
 const db = require('../database/models');
-const { User, StudentProfile, UmkmProfile, Application, Project, Review } = db;
+const { User, StudentProfile, UmkmProfile, Application, Project, Review, Chat, ProjectCheckpoint } = db;
 const { asyncHandler } = require('../middleware/error');
 const { Op } = require('sequelize');
 const { deleteFromCloudinary, getPublicIdFromUrl } = require('../config/cloudinary');
@@ -796,6 +796,568 @@ const updateAvailability = asyncHandler(async (req, res) => {
   });
 });
 
+// ====================================
+// ENHANCED: ACTIVE PROJECT MANAGEMENT
+// ====================================
+
+// @desc    Get active project (currently accepted project)
+// @route   GET /api/students/active-project
+// @access  Private (Student only)
+const getActiveProject = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] },
+        include: [
+          {
+            model: User,
+            as: 'umkm',
+            attributes: ['id', 'full_name', 'avatar_url', 'email', 'phone'],
+            include: [
+              {
+                model: UmkmProfile,
+                as: 'umkmProfile'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.json({
+      success: true,
+      data: { activeProject: null },
+      message: 'No active project found'
+    });
+  }
+
+  res.json({
+    success: true,
+    data: { 
+      activeProject: activeApplication.project,
+      application: activeApplication
+    }
+  });
+});
+
+// @desc    Get active project detailed information
+// @route   GET /api/students/active-project/details
+// @access  Private (Student only)
+const getActiveProjectDetails = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] },
+        include: [
+          {
+            model: User,
+            as: 'umkm',
+            attributes: ['id', 'full_name', 'avatar_url', 'email', 'phone'],
+            include: [
+              {
+                model: UmkmProfile,
+                as: 'umkmProfile'
+              }
+            ]
+          },
+          {
+            model: ProjectCheckpoint,
+            as: 'checkpoints',
+            order: [['order', 'ASC']]
+          }
+        ]
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  // Calculate project progress
+  const checkpoints = activeApplication.project.checkpoints || [];
+  const completedCheckpoints = checkpoints.filter(cp => cp.status === 'completed').length;
+  const progressPercentage = checkpoints.length > 0 ? 
+    Math.round((completedCheckpoints / checkpoints.length) * 100) : 0;
+
+  res.json({
+    success: true,
+    data: {
+      project: activeApplication.project,
+      application: activeApplication,
+      progress: {
+        total_checkpoints: checkpoints.length,
+        completed_checkpoints: completedCheckpoints,
+        progress_percentage: progressPercentage
+      }
+    }
+  });
+});
+
+// @desc    Get active project checkpoints
+// @route   GET /api/students/active-project/checkpoints
+// @access  Private (Student only)
+const getActiveProjectCheckpoints = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+  
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  const checkpoints = await ProjectCheckpoint.findAll({
+    where: { project_id: activeApplication.project.id },
+    order: [['order', 'ASC']]
+  });
+
+  res.json({
+    success: true,
+    data: { checkpoints }
+  });
+});
+
+// @desc    Submit checkpoint deliverable
+// @route   POST /api/students/active-project/checkpoint/:checkpointId/submit
+// @access  Private (Student only)
+const submitCheckpoint = asyncHandler(async (req, res) => {
+  const { checkpointId } = req.params;
+  const { notes } = req.body;
+  const userId = req.user.id;
+
+  // Verify this is student's active project
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  const checkpoint = await ProjectCheckpoint.findOne({
+    where: { 
+      id: checkpointId,
+      project_id: activeApplication.project.id
+    }
+  });
+
+  if (!checkpoint) {
+    return res.status(404).json({
+      success: false,
+      message: 'Checkpoint not found'
+    });
+  }
+
+  // Process uploaded files
+  const deliverables = req.files ? req.files.map(file => ({
+    id: file.public_id,
+    name: file.originalname,
+    url: file.path,
+    size: file.size,
+    type: file.mimetype,
+    uploaded_at: new Date()
+  })) : [];
+
+  // Update checkpoint
+  await checkpoint.update({
+    status: 'submitted',
+    student_notes: notes,
+    deliverables: deliverables,
+    submitted_at: new Date()
+  });
+
+  // Send notification to UMKM (implement notification system)
+  // TODO: Add notification
+
+  res.json({
+    success: true,
+    message: 'Checkpoint submitted successfully',
+    data: { checkpoint }
+  });
+});
+
+// @desc    Get active project chats
+// @route   GET /api/students/active-project/chats
+// @access  Private (Student only)
+const getActiveProjectChats = asyncHandler(async (req, res) => {
+  const { page = 1, limit = 50 } = req.query;
+  const offset = (page - 1) * limit;
+  const userId = req.user.id;
+  
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  const umkmId = activeApplication.project.umkm_id;
+
+  const { count, rows } = await Chat.findAndCountAll({
+    where: {
+      [Op.or]: [
+        { sender_id: userId, receiver_id: umkmId },
+        { sender_id: umkmId, receiver_id: userId }
+      ]
+    },
+    include: [
+      {
+        model: User,
+        as: 'sender',
+        attributes: ['id', 'full_name', 'avatar_url']
+      },
+      {
+        model: User,
+        as: 'receiver',
+        attributes: ['id', 'full_name', 'avatar_url']
+      }
+    ],
+    limit: parseInt(limit),
+    offset: parseInt(offset),
+    order: [['created_at', 'DESC']]
+  });
+
+  res.json({
+    success: true,
+    data: {
+      chats: rows.reverse(), // Reverse to show oldest first
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        pages: Math.ceil(count / limit)
+      }
+    }
+  });
+});
+
+// @desc    Send message to UMKM
+// @route   POST /api/students/active-project/chat
+// @access  Private (Student only)
+const sendProjectMessage = asyncHandler(async (req, res) => {
+  const { message } = req.body;
+  const userId = req.user.id;
+
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  const newMessage = await Chat.create({
+    sender_id: userId,
+    receiver_id: activeApplication.project.umkm_id,
+    message,
+    type: 'text'
+  });
+
+  const messageWithSender = await Chat.findByPk(newMessage.id, {
+    include: [
+      {
+        model: User,
+        as: 'sender',
+        attributes: ['id', 'full_name', 'avatar_url']
+      },
+      {
+        model: User,
+        as: 'receiver',
+        attributes: ['id', 'full_name', 'avatar_url']
+      }
+    ]
+  });
+
+  // Send real-time notification via socket
+  req.io.to(`user_${activeApplication.project.umkm_id}`).emit('new_message', messageWithSender);
+
+  res.json({
+    success: true,
+    message: 'Message sent successfully',
+    data: { chat: messageWithSender }
+  });
+});
+
+// @desc    Upload project deliverables
+// @route   POST /api/students/active-project/deliverables
+// @access  Private (Student only)
+const uploadProjectDeliverables = asyncHandler(async (req, res) => {
+  const { description } = req.body;
+  const userId = req.user.id;
+
+  if (!req.files || req.files.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'No files uploaded'
+    });
+  }
+
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  const deliverables = req.files.map(file => ({
+    id: file.public_id,
+    name: file.originalname,
+    url: file.path,
+    size: file.size,
+    type: file.mimetype,
+    description: description,
+    uploaded_at: new Date()
+  }));
+
+  // Store deliverables in project (or create separate deliverables table)
+  const project = activeApplication.project;
+  const currentAttachments = project.attachments || [];
+  const updatedAttachments = [...currentAttachments, ...deliverables];
+
+  await Project.update(
+    { attachments: updatedAttachments },
+    { where: { id: project.id } }
+  );
+
+  res.json({
+    success: true,
+    message: 'Deliverables uploaded successfully',
+    data: { deliverables }
+  });
+});
+
+// @desc    Update project status (student side)
+// @route   PUT /api/students/active-project/status
+// @access  Private (Student only)
+const updateProjectStatus = asyncHandler(async (req, res) => {
+  const { status, notes } = req.body;
+  const userId = req.user.id;
+
+  const validStatuses = ['pause_request', 'help_needed', 'ready_for_review'];
+  
+  if (!validStatuses.includes(status)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid status'
+    });
+  }
+
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  // Update application with student notes
+  await activeApplication.update({
+    student_notes: notes
+  });
+
+  // TODO: Create notification for UMKM about status change
+
+  res.json({
+    success: true,
+    message: 'Project status updated successfully',
+    data: {
+      status,
+      notes
+    }
+  });
+});
+
+// @desc    Request project completion
+// @route   POST /api/students/active-project/request-completion
+// @access  Private (Student only)
+const requestProjectCompletion = asyncHandler(async (req, res) => {
+  const { completion_notes, final_deliverables } = req.body;
+  const userId = req.user.id;
+
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'accepted' 
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project',
+        where: { status: ['in_progress', 'open'] }
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No active project found'
+    });
+  }
+
+  // Update application status to completion requested
+  await activeApplication.update({
+    status: 'completion_requested',
+    student_notes: completion_notes
+  });
+
+  // TODO: Send notification to UMKM for review
+
+  res.json({
+    success: true,
+    message: 'Project completion requested successfully. Waiting for UMKM review.'
+  });
+});
+
+// @desc    Complete project (after UMKM approval)
+// @route   POST /api/students/active-project/complete
+// @access  Private (Student only)
+const completeProject = asyncHandler(async (req, res) => {
+  const userId = req.user.id;
+
+  const activeApplication = await Application.findOne({
+    where: { 
+      student_id: userId, 
+      status: 'completion_approved' // Only if UMKM approved
+    },
+    include: [
+      {
+        model: Project,
+        as: 'project'
+      }
+    ]
+  });
+
+  if (!activeApplication) {
+    return res.status(404).json({
+      success: false,
+      message: 'No project ready for completion found'
+    });
+  }
+
+  // Update project and application status
+  await Promise.all([
+    Project.update(
+      { status: 'completed' },
+      { where: { id: activeApplication.project.id } }
+    ),
+    activeApplication.update({ status: 'completed' }),
+    // Update student profile
+    StudentProfile.increment(
+      'total_projects_completed',
+      { where: { user_id: userId } }
+    )
+  ]);
+
+  res.json({
+    success: true,
+    message: 'Project completed successfully!'
+  });
+});
+
 module.exports = {
   getAllStudents,
   getStudentById,
@@ -815,5 +1377,16 @@ module.exports = {
   getMyApplications,
   getMyProjects,
   getRecommendations,
-  updateAvailability
+  updateAvailability,
+  // Enhanced: Active Project Management
+  getActiveProject,
+  getActiveProjectDetails,
+  getActiveProjectCheckpoints,
+  submitCheckpoint,
+  getActiveProjectChats,
+  sendProjectMessage,
+  uploadProjectDeliverables,
+  updateProjectStatus,
+  requestProjectCompletion,
+  completeProject
 };
