@@ -268,6 +268,62 @@ io.on('connection', (socket) => {
 // Database sync and server start
 const PORT = process.env.PORT || 3000;
 
+// Enhanced SQL error diagnosis function
+function diagnoseSQLError(error) {
+  if (error.message.includes('syntax error at or near "USING"')) {
+    return {
+      type: 'SQL_SYNTAX_USING',
+      solutions: [
+        'Run: npm run db:fix:payments (fix payments table)',
+        'Run: npm run db:reset:payments (recreate payments table)',
+        'Check for constraint name conflicts in database'
+      ]
+    };
+  }
+  
+  if (error.message.includes('column') && error.message.includes('does not exist')) {
+    return {
+      type: 'MISSING_COLUMN',
+      solutions: [
+        'Run: npm run db:fix (fix missing columns)',
+        'Run: npm run db:migrate (full migration)',
+        'Set DB_DISABLE_ALTER=false in .env to enable auto-sync'
+      ]
+    };
+  }
+  
+  if (error.message.includes('relation') && error.message.includes('does not exist')) {
+    return {
+      type: 'MISSING_TABLE',
+      solutions: [
+        'Run: npm run db:migrate (create missing tables)',
+        'Check database connection and permissions',
+        'Verify database name in .env file'
+      ]
+    };
+  }
+  
+  if (error.message.includes('already exists')) {
+    return {
+      type: 'CONSTRAINT_CONFLICT',
+      solutions: [
+        'Run: npm run db:reset:payments (reset payments table)',
+        'Manually drop conflicting constraints',
+        'Use force sync: DB_FORCE_SYNC=true npm start (WARNING: data loss)'
+      ]
+    };
+  }
+  
+  return {
+    type: 'UNKNOWN_SQL',
+    solutions: [
+      'Check PostgreSQL logs for details',
+      'Verify PostgreSQL version compatibility',
+      'Try: npm run db:migrate to sync all models'
+    ]
+  };
+}
+
 async function startServer() {
   try {
     console.log('🔍 Checking database models...');
@@ -325,6 +381,9 @@ async function startServer() {
     console.error('❌ Unable to start server:', error.message);
     console.error('📍 Stack trace:', error.stack);
     
+    // Enhanced error diagnosis
+    const diagnosis = diagnoseSQLError(error);
+    
     if (error.name === 'SequelizeConnectionError') {
       console.error('💡 Database connection failed. Possible solutions:');
       console.error('   - Check if PostgreSQL is running');
@@ -333,11 +392,11 @@ async function startServer() {
       console.error('   - Check network connectivity');
     } else if (error.code === 'MODULE_NOT_FOUND') {
       console.error('💡 Missing dependency. Run: npm install');
-    } else if (error.message.includes('column') && error.message.includes('does not exist')) {
-      console.error('💡 Database schema mismatch. Try these solutions:');
-      console.error('   1. Set DB_DISABLE_ALTER=false in .env to enable automatic schema updates');
-      console.error('   2. Run: npm run migrate to manually update schema');
-      console.error('   3. For development: Set DB_FORCE_SYNC=true to recreate database (WARNING: data loss)');
+    } else if (diagnosis.type !== 'UNKNOWN_SQL') {
+      console.error(`💡 ${diagnosis.type} detected. Recommended solutions:`);
+      diagnosis.solutions.forEach((solution, index) => {
+        console.error(`   ${index + 1}. ${solution}`);
+      });
     } else {
       console.error('💡 Check your configuration and try again');
     }
