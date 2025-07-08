@@ -104,32 +104,77 @@ module.exports = (sequelize, DataTypes) => {
   }, {
     indexes: [
       {
-        fields: ['project_id']
+        fields: ['project_id'],
+        name: 'payments_project_id_idx'
       },
       {
-        fields: ['umkm_id']
+        fields: ['umkm_id'],
+        name: 'payments_umkm_id_idx'
       },
       {
-        fields: ['student_id']
+        fields: ['student_id'],
+        name: 'payments_student_id_idx'
       },
       {
-        fields: ['status']
+        fields: ['status'],
+        name: 'payments_status_idx'
       },
       {
-        fields: ['payment_phase']
+        fields: ['payment_phase'],
+        name: 'payments_payment_phase_idx'
       },
       {
-        fields: ['due_date']
+        fields: ['due_date'],
+        name: 'payments_due_date_idx'
       },
       {
-        fields: ['created_at']
+        fields: ['created_at'],
+        name: 'payments_created_at_idx'
       },
       {
-        unique: true,
-        fields: ['project_id', 'payment_phase'],
-        name: 'unique_project_payment_phase'
+        fields: ['payment_method'],
+        name: 'payments_payment_method_idx'
+      },
+      {
+        fields: ['payment_gateway'],
+        name: 'payments_payment_gateway_idx'
       }
-    ]
+    ],
+    // Move unique constraint to model level validation instead of index
+    validate: {
+      // Ensure only one payment per phase per project
+      uniqueProjectPaymentPhase() {
+        return sequelize.models.payments.findOne({
+          where: {
+            project_id: this.project_id,
+            payment_phase: this.payment_phase,
+            id: { [sequelize.Sequelize.Op.ne]: this.id }
+          }
+        }).then(payment => {
+          if (payment) {
+            throw new Error(`Payment for ${this.payment_phase} phase already exists for this project`);
+          }
+        });
+      }
+    },
+    hooks: {
+      beforeCreate: async (payment) => {
+        // Calculate net_amount if not provided
+        if (!payment.net_amount && payment.amount && payment.admin_fee) {
+          const feeAmount = (payment.amount * payment.admin_fee) / 100;
+          payment.net_amount = payment.amount - feeAmount;
+        } else if (!payment.net_amount) {
+          payment.net_amount = payment.amount;
+        }
+      },
+      beforeUpdate: async (payment) => {
+        // Recalculate net_amount if amount or admin_fee changed
+        if (payment.changed('amount') || payment.changed('admin_fee')) {
+          const feeAmount = (payment.amount * payment.admin_fee) / 100;
+          payment.net_amount = payment.amount - feeAmount;
+        }
+      }
+    }
   });
 
   return Payment;
