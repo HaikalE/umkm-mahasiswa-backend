@@ -22,6 +22,7 @@ const pricingRoutes = require('./pricing');
 
 // ENHANCED: Active Project Management Routes
 const activeProjectRoutes = require('./activeProject');
+const umkmActiveProjectRoutes = require('./umkmActiveProject');
 
 // API version prefix
 router.use('/auth', authRoutes);
@@ -44,6 +45,7 @@ router.use('/pricing', pricingRoutes);
 
 // ENHANCED: Active Project Management
 router.use('/students/active-project', activeProjectRoutes);
+router.use('/umkm/active-projects', umkmActiveProjectRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {
@@ -70,7 +72,8 @@ router.get('/', (req, res) => {
       matching: '/api/matching',
       pricing: '/api/pricing',
       // NEW: Active Project Management
-      activeProject: '/api/students/active-project'
+      studentActiveProject: '/api/students/active-project',
+      umkmActiveProjects: '/api/umkm/active-projects'
     },
     features: {
       payment_system: '50-50 split payment with escrow',
@@ -83,7 +86,9 @@ router.get('/', (req, res) => {
       // NEW FEATURES
       active_project_management: 'Comprehensive project tracking for ongoing work',
       deliverable_submission: 'File upload and progress tracking system',
-      milestone_management: 'Checkpoint-based project progress'
+      milestone_management: 'Checkpoint-based project progress',
+      umkm_project_oversight: 'UMKM dashboard for monitoring student work',
+      real_time_collaboration: 'Chat and file sharing between UMKM and students'
     },
     documentation: '/api/docs'
   });
