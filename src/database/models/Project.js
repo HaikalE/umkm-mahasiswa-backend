@@ -84,7 +84,7 @@ module.exports = (sequelize, DataTypes) => {
       comment: 'Array of attachment file URLs'
     },
     status: {
-      type: DataTypes.ENUM('open', 'in_progress', 'completed', 'cancelled', 'closed'),
+      type: DataTypes.ENUM('open', 'in_progress', 'completion_requested', 'completed', 'cancelled', 'closed'),
       defaultValue: 'open'
     },
     priority: {
@@ -123,6 +123,56 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.JSON,
       allowNull: true,
       comment: 'Array of tags for search'
+    },
+    // ENHANCED: Active Project Management Fields
+    deliverables: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      comment: 'Array of project deliverables uploaded by student'
+    },
+    completion_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Student notes when requesting completion'
+    },
+    umkm_completion_notes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'UMKM notes when approving completion'
+    },
+    completion_requested_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'When student requested project completion'
+    },
+    completed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'When project was marked as completed'
+    },
+    started_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'When project actually started (when student was selected)'
+    },
+    estimated_completion_date: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'Estimated completion date based on duration'
+    },
+    actual_budget: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true,
+      comment: 'Final agreed budget from accepted application'
+    },
+    progress_percentage: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      validate: {
+        min: 0,
+        max: 100
+      },
+      comment: 'Overall project progress percentage'
     }
   }, {
     indexes: [
@@ -152,8 +202,34 @@ module.exports = (sequelize, DataTypes) => {
       },
       {
         fields: ['is_featured']
+      },
+      // ENHANCED: New indexes for active project management
+      {
+        fields: ['selected_student_id']
+      },
+      {
+        fields: ['started_at']
+      },
+      {
+        fields: ['completed_at']
+      },
+      {
+        fields: ['status', 'selected_student_id']
       }
-    ]
+    ],
+    hooks: {
+      // Auto-calculate estimated completion date when project starts
+      beforeUpdate: (project, options) => {
+        if (project.changed('selected_student_id') && project.selected_student_id) {
+          project.started_at = new Date();
+          if (project.duration) {
+            const estimatedDate = new Date();
+            estimatedDate.setDate(estimatedDate.getDate() + project.duration);
+            project.estimated_completion_date = estimatedDate;
+          }
+        }
+      }
+    }
   });
 
   return Project;
