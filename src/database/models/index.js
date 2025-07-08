@@ -77,6 +77,13 @@ Project.hasMany(ProjectCheckpoint, { foreignKey: 'project_id', as: 'checkpoints'
 Project.hasMany(Payment, { foreignKey: 'project_id', as: 'payments' });
 Project.belongsTo(PricingTier, { foreignKey: 'pricing_tier_id', as: 'pricingTier' });
 
+// ENHANCED: Selected Student Association
+Project.belongsTo(User, { 
+  foreignKey: 'selected_student_id', 
+  as: 'selectedStudent',
+  constraints: false // This allows null values
+});
+
 // Application associations
 Application.belongsTo(User, { foreignKey: 'student_id', as: 'student' });
 Application.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
